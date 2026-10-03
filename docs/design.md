@@ -75,7 +75,7 @@
 所有參數集中在 `include/poll_sim/params.hpp`：
 
 - `PopulationParams`：母體大小（上限約 1,677 萬人，即 2²⁴，受號碼名單的編號位元數限制）、各維度比例、投票傾向、接聽率（MAR 與 MNAR 情境）、市話擁有率、手機數量分布、手機接聽率、母體 seed。
-- `SimParams`：要測試的樣本數清單 `sample_sizes`、重複次數 `replications`、抽樣 seed、抽取順序 `order`（可用命令列 `--order=random|sequential` 覆寫）。
+- `SimParams`：要測試的樣本數清單 `sample_sizes`、重複次數 `replications`、抽樣 seed、抽取順序 `order`（可用命令列 `--order=random|sequential` 覆寫）、接聽模型 `response`（可用 `--response=per-call|fixed` 覆寫）。
 
 母體與抽樣使用不同的 seed，可以固定母體、只改變抽樣。
 
@@ -119,6 +119,18 @@
 - 兩種順序的統計性質相同，差別在記憶體存取模式：Sequential 依序讀取名單或母體、不需要記錄用過的位置，用來觀察存取模式對效能的影響。洗牌後的手機名單仍會隨機存取母體。
 - Random 模式的輸出與加入此選項前完全相同。
 
+**接聽模型（`SimParams::response`）**：決定電話撥通後「接或不接」何時決定，由 `--response` 切換。
+
+| 模型 | 做法 |
+|---|---|
+| PerCall（預設） | 每通電話各自依接聽率擲一次骰子；同一號碼在不同次民調中可能接也可能不接 |
+| Fixed | 建立名單時，依該方法的接聽率替**每個號碼**抽一次，結果存在 `FrameEntry` 的 bit 30；同一實驗的每次民調都沿用 |
+
+- Fixed 是模型的變更而不是單純的優化，輸出與 PerCall 不同。單次民調的統計性質幾乎相同：會接的號碼有數百萬個，組成與期望值只差極小的抽樣誤差；但同一號碼在各次民調中的答案相同，各次民調之間有少許相關。
+- 以號碼決定（而非以人決定），同一人的多支手機各自決定接不接，重複受訪的情況與 PerCall 相近。
+- 接聽結果使用由抽樣 seed 與抽樣方法衍生的亂數序列，在洗牌之前依名單順序抽出，因此 Random 與 Sequential 兩種順序看到同一批會接的號碼。
+- 撥號時不必再產生亂數，撥號本身快 2 到 3.5 倍；建立名單時多一次逐筆抽樣。PerCall 的輸出與加入此選項前完全相同。
+
 ## 估計方法
 
 | 方法 | 估計值 | 標準誤 |
@@ -152,7 +164,7 @@
 | `population` | `generate_population`：依參數生成母體 |
 | `sampling` | `SamplingMethod`、市話與手機名單（`build_landline_frame`、`build_mobile_frame`）、`simple_random_sample`、`landline_sample`、`mobile_sample`（皆可指定 `DrawOrder`）、`UsedPositions` |
 | `poll` | `PollResult`（各候選人、年齡層、年齡 × 候選人人數，以及設計權重總和）、`tally`（只讀 `Sample`，不讀母體）、母體真值計算（含各年齡層內的支持比例） |
-| `experiment` | `build_frame`：依抽樣方法建立名單（Sequential 時洗牌手機名單）；`run_experiment`：以指定抽樣方法與名單重複執行民調 |
+| `experiment` | `build_frame`：依抽樣方法建立名單（Fixed 時抽出每個號碼是否接聽，Sequential 時洗牌手機名單）；`run_experiment`：以指定抽樣方法與名單重複執行民調 |
 | `estimate` | `Estimate`、未加權、年齡加權、多重性加權、多重性 + 年齡加權估計，以及 Kish 有效樣本數 |
 | `stats` | `summarize`：彙整多次估計的偏差、誤差範圍、涵蓋率等 |
 | `main.cpp` | 串接上述模組並印出結果 |

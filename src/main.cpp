@@ -383,15 +383,21 @@ void print_sample_size_tables(const std::vector<SampleSizeResult>& rows) {
 }
 
 void print_usage(std::string_view program) {
-    std::cout << "Usage: " << program << " [--order=random|sequential]\n"
-              << "  --order  how polls draw voters or phone numbers; overrides SimParams::order\n"
-              << "           (default " << to_string(SimParams{}.order) << ")\n";
+    std::cout << "Usage: " << program
+              << " [--order=random|sequential] [--response=per-call|fixed]\n"
+              << "  --order     how polls draw voters or phone numbers; overrides\n"
+              << "              SimParams::order (default " << to_string(SimParams{}.order)
+              << ")\n"
+              << "  --response  whether each call is answered by a fresh draw or by a choice\n"
+              << "              fixed per number; overrides SimParams::response (default "
+              << to_string(SimParams{}.response) << ")\n";
 }
 
 // Applies command-line overrides to sim. Returns false if help was requested.
 // Throws std::invalid_argument on an unknown argument or value.
 bool parse_args(int argc, char* argv[], SimParams& sim) {
     constexpr std::string_view kOrder = "--order=";
+    constexpr std::string_view kResponse = "--response=";
     for (int i = 1; i < argc; ++i) {
         const std::string_view arg = argv[i];
         if (arg == "--help" || arg == "-h") {
@@ -405,6 +411,17 @@ bool parse_args(int argc, char* argv[], SimParams& sim) {
                 sim.order = DrawOrder::Sequential;
             } else {
                 throw std::invalid_argument("unknown --order value: " + std::string(value));
+            }
+            continue;
+        }
+        if (arg.starts_with(kResponse)) {
+            const std::string_view value = arg.substr(kResponse.size());
+            if (value == "per-call") {
+                sim.response = ResponseModel::PerCall;
+            } else if (value == "fixed") {
+                sim.response = ResponseModel::Fixed;
+            } else {
+                throw std::invalid_argument("unknown --response value: " + std::string(value));
             }
             continue;
         }
@@ -456,7 +473,8 @@ int main(int argc, char* argv[]) {
         const Arr<double, kAgeGroupCount> age_share = population_age_share(population);
 
         std::cout << "Experiment by sample size: replications = " << sim.replications
-                  << ", seed = " << sim.seed << ", order = " << to_string(sim.order) << '\n';
+                  << ", seed = " << sim.seed << ", order = " << to_string(sim.order)
+                  << ", response = " << to_string(sim.response) << '\n';
 
         std::vector<SampleSizeResult> rows;
         for (std::size_t n : sim.sample_sizes) {
@@ -469,7 +487,7 @@ int main(int argc, char* argv[]) {
         // sample size, and freed before the next method's frame is built.
         for (SamplingMethod method : kSamplingMethods) {
             const auto frame_start = std::chrono::steady_clock::now();
-            const Frame frame = build_frame(population, method, sim);
+            const Frame frame = build_frame(population, params, method, sim);
             const auto frame_elapsed =
                 std::chrono::duration<double>(std::chrono::steady_clock::now() - frame_start);
             std::cout << "  " << to_string(method) << " frame built in " << std::fixed

@@ -112,6 +112,22 @@ constexpr std::string_view to_string(DrawOrder v) noexcept {
     return "Unknown";
 }
 
+// When a phone number's owner decides whether to answer.
+enum class ResponseModel : std::uint8_t {
+    PerCall,  // every call is an independent draw with the response rate
+    Fixed,    // drawn once per number when the frame is built; the same for every poll
+};
+
+inline constexpr std::size_t kResponseModelCount = 2;
+
+constexpr std::string_view to_string(ResponseModel v) noexcept {
+    switch (v) {
+        case ResponseModel::PerCall: return "PerCall";
+        case ResponseModel::Fixed: return "Fixed";
+    }
+    return "Unknown";
+}
+
 // Simulation parameters: how sampling is run.
 struct SimParams {
     // Each sample size is run as a separate experiment.
@@ -124,6 +140,10 @@ struct SimParams {
     // order; mobile frames are shuffled first because a voter's numbers are adjacent.
     // Overridable with --order=random|sequential.
     DrawOrder order = DrawOrder::Random;
+    // Fixed is much faster (no random draw per call) but changes the model: a number that
+    // answers does so in every poll, so the polls of one experiment share their respondents
+    // pool. Overridable with --response=per-call|fixed.
+    ResponseModel response = ResponseModel::PerCall;
     unsigned threads = 0;  // 0 = auto-detect
 };
 

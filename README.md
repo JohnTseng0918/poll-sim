@@ -52,12 +52,13 @@ perf record -g ./build-prof/poll_sim && perf report --stdio
 ```bash
 ./build/poll_sim                      # 隨機抽取（預設）
 ./build/poll_sim --order=sequential   # 從隨機起點依序抽取，統計上等價、速度快很多
+./build/poll_sim --response=fixed     # 每個號碼接不接在建名單時就決定，撥號更快，但模型不同
 ./build/poll_sim --help
 ```
 
 程式會生成母體、印出各維度比例與電話涵蓋，再依各樣本數比較各種做法的估計結果：SimpleRandom、Landline（MAR 與 MNAR 接聽率，各自有無年齡加權）、Mobile（未加權、多重性加權、多重性 + 年齡加權）。
 
-參數集中在 `include/poll_sim/params.hpp`，修改後重新建置即可；抽取順序也可以用 `--order` 在執行時切換。結果為固定 seed，可完全重現。
+參數集中在 `include/poll_sim/params.hpp`，修改後重新建置即可；抽取順序與接聽模型也可以用 `--order`、`--response` 在執行時切換。結果為固定 seed，可完全重現。
 
 ### 輸出欄位說明
 

@@ -7,11 +7,26 @@ namespace poll_sim {
 
 namespace {
 
+// Whether the owner of a number answers this call: drawn now for PerCall,
+// read from the frame for Fixed.
+bool answers_call(const FrameEntry& entry,
+                  const Arr<Arr<double, kCandidateCount>, kAgeGroupCount>& response_rate,
+                  ResponseModel response, std::uniform_real_distribution<double>& unit,
+                  std::mt19937_64& rng) {
+    if (response == ResponseModel::Fixed) {
+        return entry.answers();
+    }
+    const double p = response_rate[static_cast<std::size_t>(entry.age())]
+                                  [static_cast<std::size_t>(entry.candidate())];
+    return unit(rng) < p;
+}
+
 // Keeps calling distinct random numbers from the frame until n voters respond, recording the
 // called numbers in used. Fills respondents and contacts; the caller sets the rest.
 Sample random_phone_sample(const Frame& frame,
                            const Arr<Arr<double, kCandidateCount>, kAgeGroupCount>& response_rate,
-                           std::size_t n, UsedPositions& used, std::mt19937_64& rng) {
+                           std::size_t n, ResponseModel response, UsedPositions& used,
+                           std::mt19937_64& rng) {
     if (used.size() < frame.size()) {
         throw std::invalid_argument("UsedPositions is smaller than the frame");
     }
@@ -33,9 +48,7 @@ Sample random_phone_sample(const Frame& frame,
         }
 
         const FrameEntry entry = frame[number];
-        const double p = response_rate[static_cast<std::size_t>(entry.age())]
-                                      [static_cast<std::size_t>(entry.candidate())];
-        if (unit(rng) < p) {
+        if (answers_call(entry, response_rate, response, unit, rng)) {
             sample.respondents.push_back(entry);
         }
     }
@@ -49,7 +62,7 @@ Sample random_phone_sample(const Frame& frame,
 // Fills respondents and contacts; the caller sets the rest.
 Sample sequential_phone_sample(
     const Frame& frame, const Arr<Arr<double, kCandidateCount>, kAgeGroupCount>& response_rate,
-    std::size_t n, std::mt19937_64& rng) {
+    std::size_t n, ResponseModel response, std::mt19937_64& rng) {
     std::uniform_int_distribution<std::size_t> start_dist(0, frame.size() - 1);
     std::uniform_real_distribution<double> unit(0.0, 1.0);
     std::size_t number = start_dist(rng);
@@ -61,9 +74,7 @@ Sample sequential_phone_sample(
         }
 
         const FrameEntry entry = frame[number];
-        const double p = response_rate[static_cast<std::size_t>(entry.age())]
-                                      [static_cast<std::size_t>(entry.candidate())];
-        if (unit(rng) < p) {
+        if (answers_call(entry, response_rate, response, unit, rng)) {
             sample.respondents.push_back(entry);
         }
         ++sample.contacts;
@@ -87,7 +98,8 @@ std::size_t count_duplicates(const std::vector<FrameEntry>& respondents) {
 // Fills respondents and contacts; the caller sets the weights and duplicates.
 Sample phone_sample(const Frame& frame,
                     const Arr<Arr<double, kCandidateCount>, kAgeGroupCount>& response_rate,
-                    std::size_t n, DrawOrder order, UsedPositions& used, std::mt19937_64& rng) {
+                    std::size_t n, DrawOrder order, ResponseModel response, UsedPositions& used,
+                    std::mt19937_64& rng) {
     if (n > frame.size()) {
         throw std::invalid_argument("sample size exceeds frame size");
     }
@@ -95,10 +107,10 @@ Sample phone_sample(const Frame& frame,
     Sample sample;
     switch (order) {
         case DrawOrder::Random:
-            sample = random_phone_sample(frame, response_rate, n, used, rng);
+            sample = random_phone_sample(frame, response_rate, n, response, used, rng);
             break;
         case DrawOrder::Sequential:
-            sample = sequential_phone_sample(frame, response_rate, n, rng);
+            sample = sequential_phone_sample(frame, response_rate, n, response, rng);
             break;
     }
     return sample;
@@ -215,9 +227,9 @@ Frame build_mobile_frame(const std::vector<Voter>& population) {
 
 Sample landline_sample(const Frame& frame,
                        const Arr<Arr<double, kCandidateCount>, kAgeGroupCount>& response_rate,
-                       std::size_t n, DrawOrder order, UsedPositions& used,
-                       std::mt19937_64& rng) {
-    Sample sample = phone_sample(frame, response_rate, n, order, used, rng);
+                       std::size_t n, DrawOrder order, ResponseModel response,
+                       UsedPositions& used, std::mt19937_64& rng) {
+    Sample sample = phone_sample(frame, response_rate, n, order, response, used, rng);
     sample.weights.assign(sample.respondents.size(), 1.0);
     // Each voter has a single landline number, so nobody can respond twice: duplicates stays 0.
     return sample;
@@ -225,9 +237,9 @@ Sample landline_sample(const Frame& frame,
 
 Sample mobile_sample(const Frame& frame,
                      const Arr<Arr<double, kCandidateCount>, kAgeGroupCount>& response_rate,
-                     std::size_t n, DrawOrder order, UsedPositions& used,
-                     std::mt19937_64& rng) {
-    Sample sample = phone_sample(frame, response_rate, n, order, used, rng);
+                     std::size_t n, DrawOrder order, ResponseModel response,
+                     UsedPositions& used, std::mt19937_64& rng) {
+    Sample sample = phone_sample(frame, response_rate, n, order, response, used, rng);
     for (const FrameEntry& respondent : sample.respondents) {
         sample.weights.push_back(1.0 / respondent.phones());
     }

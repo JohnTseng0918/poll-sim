@@ -31,7 +31,8 @@ constexpr std::string_view to_string(SamplingMethod v) noexcept {
 // A voter's population index packed together with the attributes a poll needs, so neither
 // calling a number nor tallying a respondent reads the population. Used for the numbers in a
 // sampling frame and for the respondents in a Sample.
-// Bits 0-23: voter index, 24-25: age group, 26-27: candidate, 28-29: phone count.
+// Bits 0-23: voter index, 24-25: age group, 26-27: candidate, 28-29: phone count,
+// 30: whether the number answers, used by ResponseModel::Fixed (0 unless set).
 class FrameEntry {
 public:
     static constexpr std::size_t kMaxVoters = std::size_t{1} << 24;
@@ -45,6 +46,10 @@ public:
         return static_cast<Candidate>((bits_ >> kCandidateShift) & kFieldMask);
     }
     int phones() const { return static_cast<int>((bits_ >> kPhonesShift) & kFieldMask); }
+    bool answers() const { return (bits_ & kAnswersBit) != 0; }
+    void set_answers(bool answers) {
+        bits_ = answers ? (bits_ | kAnswersBit) : (bits_ & ~kAnswersBit);
+    }
 
 private:
     static constexpr std::uint32_t kIndexMask = (std::uint32_t{1} << 24) - 1;
@@ -52,6 +57,7 @@ private:
     static constexpr unsigned kAgeShift = 24;
     static constexpr unsigned kCandidateShift = 26;
     static constexpr unsigned kPhonesShift = 28;
+    static constexpr std::uint32_t kAnswersBit = std::uint32_t{1} << 30;
 
     std::uint32_t bits_;
 };
@@ -122,13 +128,15 @@ Frame build_mobile_frame(const std::vector<Voter>& population);
 // response_rate[age][candidate]; numbers that do not respond are never called again.
 // Random: calls random numbers, recording them in used, which must cover the frame and is
 // cleared first. Sequential: calls consecutive numbers from a random position, wrapping
-// around; the frame must be in random order, and used is not touched. Every weight is 1.
+// around; the frame must be in random order, and used is not touched.
+// PerCall draws whether each call is answered; Fixed reads FrameEntry::answers() instead and
+// ignores response_rate. Every weight is 1.
 // Throws std::invalid_argument if the frame runs out before n voters respond,
 // or used is too small.
 Sample landline_sample(const Frame& frame,
                        const Arr<Arr<double, kCandidateCount>, kAgeGroupCount>& response_rate,
-                       std::size_t n, DrawOrder order, UsedPositions& used,
-                       std::mt19937_64& rng);
+                       std::size_t n, DrawOrder order, ResponseModel response,
+                       UsedPositions& used, std::mt19937_64& rng);
 
 // Simulates a mobile poll: same as landline_sample but calls numbers from the mobile frame.
 // A voter with k phones is k times as likely to be called and may respond more than once
@@ -139,7 +147,7 @@ Sample landline_sample(const Frame& frame,
 // or used is too small.
 Sample mobile_sample(const Frame& frame,
                      const Arr<Arr<double, kCandidateCount>, kAgeGroupCount>& response_rate,
-                     std::size_t n, DrawOrder order, UsedPositions& used,
-                     std::mt19937_64& rng);
+                     std::size_t n, DrawOrder order, ResponseModel response,
+                     UsedPositions& used, std::mt19937_64& rng);
 
 }  // namespace poll_sim

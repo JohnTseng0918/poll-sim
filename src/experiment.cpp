@@ -44,12 +44,12 @@ std::vector<PollResult> run_experiment(const std::vector<Voter>& population,
                 sample = simple_random_sample(population, sample_size, sim.order, used, rng);
                 break;
             case SamplingMethod::Landline:
-                sample = landline_sample(population, frame, params.response_rate, sample_size,
-                                         sim.order, used, rng);
+                sample = landline_sample(frame, params.response_rate, sample_size, sim.order,
+                                         used, rng);
                 break;
             case SamplingMethod::LandlineMNAR:
-                sample = landline_sample(population, frame, params.landline_mnar_response_rate,
-                                         sample_size, sim.order, used, rng);
+                sample = landline_sample(frame, params.landline_mnar_response_rate, sample_size,
+                                         sim.order, used, rng);
                 break;
             case SamplingMethod::Mobile:
                 sample = mobile_sample(population, frame, params.mobile_response_rate,

@@ -1,7 +1,6 @@
 #include "poll_sim/sampling.hpp"
 
 #include <algorithm>
-#include <limits>
 #include <stdexcept>
 
 namespace poll_sim {
@@ -10,7 +9,7 @@ namespace {
 
 // Keeps calling distinct random numbers from the frame until n voters respond, recording the
 // called numbers in used. Fills respondents and contacts; the caller sets the rest.
-Sample random_phone_sample(const std::vector<Voter>& population, const Frame& frame,
+Sample random_phone_sample(const Frame& frame,
                            const Arr<Arr<double, kCandidateCount>, kAgeGroupCount>& response_rate,
                            std::size_t n, UsedPositions& used, std::mt19937_64& rng) {
     if (used.size() < frame.size()) {
@@ -33,12 +32,11 @@ Sample random_phone_sample(const std::vector<Voter>& population, const Frame& fr
             continue;
         }
 
-        const std::size_t index = frame[number];
-        const Voter& voter = population[index];
-        const double p = response_rate[static_cast<std::size_t>(voter.age)]
-                                      [static_cast<std::size_t>(voter.candidate)];
+        const FrameEntry entry = frame[number];
+        const double p = response_rate[static_cast<std::size_t>(entry.age())]
+                                      [static_cast<std::size_t>(entry.candidate())];
         if (unit(rng) < p) {
-            sample.respondents.push_back(index);
+            sample.respondents.push_back(entry.voter_index());
         }
     }
     sample.contacts = used.count();
@@ -50,9 +48,8 @@ Sample random_phone_sample(const std::vector<Voter>& population, const Frame& fr
 // start, so no record of called numbers is needed.
 // Fills respondents and contacts; the caller sets the rest.
 Sample sequential_phone_sample(
-    const std::vector<Voter>& population, const Frame& frame,
-    const Arr<Arr<double, kCandidateCount>, kAgeGroupCount>& response_rate, std::size_t n,
-    std::mt19937_64& rng) {
+    const Frame& frame, const Arr<Arr<double, kCandidateCount>, kAgeGroupCount>& response_rate,
+    std::size_t n, std::mt19937_64& rng) {
     std::uniform_int_distribution<std::size_t> start_dist(0, frame.size() - 1);
     std::uniform_real_distribution<double> unit(0.0, 1.0);
     std::size_t number = start_dist(rng);
@@ -63,12 +60,11 @@ Sample sequential_phone_sample(
             throw std::invalid_argument("frame exhausted before reaching the sample size");
         }
 
-        const std::size_t index = frame[number];
-        const Voter& voter = population[index];
-        const double p = response_rate[static_cast<std::size_t>(voter.age)]
-                                      [static_cast<std::size_t>(voter.candidate)];
+        const FrameEntry entry = frame[number];
+        const double p = response_rate[static_cast<std::size_t>(entry.age())]
+                                      [static_cast<std::size_t>(entry.candidate())];
         if (unit(rng) < p) {
-            sample.respondents.push_back(index);
+            sample.respondents.push_back(entry.voter_index());
         }
         ++sample.contacts;
         number = (number + 1 == frame.size()) ? 0 : number + 1;
@@ -85,7 +81,7 @@ std::size_t count_duplicates(std::vector<std::size_t> respondents) {
 }
 
 // Fills respondents, contacts and duplicates; the caller sets the weights.
-Sample phone_sample(const std::vector<Voter>& population, const Frame& frame,
+Sample phone_sample(const Frame& frame,
                     const Arr<Arr<double, kCandidateCount>, kAgeGroupCount>& response_rate,
                     std::size_t n, DrawOrder order, UsedPositions& used, std::mt19937_64& rng) {
     if (n > frame.size()) {
@@ -95,10 +91,10 @@ Sample phone_sample(const std::vector<Voter>& population, const Frame& frame,
     Sample sample;
     switch (order) {
         case DrawOrder::Random:
-            sample = random_phone_sample(population, frame, response_rate, n, used, rng);
+            sample = random_phone_sample(frame, response_rate, n, used, rng);
             break;
         case DrawOrder::Sequential:
-            sample = sequential_phone_sample(population, frame, response_rate, n, rng);
+            sample = sequential_phone_sample(frame, response_rate, n, rng);
             break;
     }
     sample.duplicates = count_duplicates(sample.respondents);
@@ -106,12 +102,18 @@ Sample phone_sample(const std::vector<Voter>& population, const Frame& frame,
 }
 
 void check_frame_index_range(const std::vector<Voter>& population) {
-    if (population.size() > std::numeric_limits<Frame::value_type>::max()) {
-        throw std::invalid_argument("population too large for 32-bit frame indices");
+    if (population.size() > FrameEntry::kMaxVoters) {
+        throw std::invalid_argument("population too large for 24-bit frame indices");
     }
 }
 
 }  // namespace
+
+FrameEntry::FrameEntry(std::size_t index, const Voter& voter)
+    : bits_(static_cast<std::uint32_t>(index) |
+            (static_cast<std::uint32_t>(voter.age) << kAgeShift) |
+            (static_cast<std::uint32_t>(voter.candidate) << kCandidateShift) |
+            (static_cast<std::uint32_t>(voter.phones) << kPhonesShift)) {}
 
 UsedPositions::UsedPositions(std::size_t size) : used_(size) {}
 
@@ -180,7 +182,7 @@ Frame build_landline_frame(const std::vector<Voter>& population) {
     frame.reserve(count);
     for (std::size_t i = 0; i < population.size(); ++i) {
         if (population[i].has_landline) {
-            frame.push_back(static_cast<Frame::value_type>(i));
+            frame.push_back(FrameEntry(i, population[i]));
         }
     }
     return frame;
@@ -199,17 +201,17 @@ Frame build_mobile_frame(const std::vector<Voter>& population) {
     frame.reserve(count);
     for (std::size_t i = 0; i < population.size(); ++i) {
         for (int k = 0; k < population[i].phones; ++k) {
-            frame.push_back(static_cast<Frame::value_type>(i));
+            frame.push_back(FrameEntry(i, population[i]));
         }
     }
     return frame;
 }
 
-Sample landline_sample(const std::vector<Voter>& population, const Frame& frame,
+Sample landline_sample(const Frame& frame,
                        const Arr<Arr<double, kCandidateCount>, kAgeGroupCount>& response_rate,
                        std::size_t n, DrawOrder order, UsedPositions& used,
                        std::mt19937_64& rng) {
-    Sample sample = phone_sample(population, frame, response_rate, n, order, used, rng);
+    Sample sample = phone_sample(frame, response_rate, n, order, used, rng);
     sample.weights.assign(sample.respondents.size(), 1.0);
     return sample;
 }
@@ -218,7 +220,7 @@ Sample mobile_sample(const std::vector<Voter>& population, const Frame& frame,
                      const Arr<Arr<double, kCandidateCount>, kAgeGroupCount>& response_rate,
                      std::size_t n, DrawOrder order, UsedPositions& used,
                      std::mt19937_64& rng) {
-    Sample sample = phone_sample(population, frame, response_rate, n, order, used, rng);
+    Sample sample = phone_sample(frame, response_rate, n, order, used, rng);
     for (std::size_t index : sample.respondents) {
         sample.weights.push_back(1.0 / population[index].phones);
     }

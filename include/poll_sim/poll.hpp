@@ -37,6 +37,10 @@ PollResult tally(const std::vector<Voter>& population, const Sample& sample);
 // Actual vote share of each candidate across the whole population.
 Arr<double, kCandidateCount> population_vote_share(const std::vector<Voter>& population);
 
+// Actual vote share of each candidate within each age group, indexed [age][candidate].
+Arr<Arr<double, kCandidateCount>, kAgeGroupCount> population_age_vote_share(
+    const std::vector<Voter>& population);
+
 // Actual share of each age group across the whole population.
 Arr<double, kAgeGroupCount> population_age_share(const std::vector<Voter>& population);
 

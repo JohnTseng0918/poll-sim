@@ -6,7 +6,7 @@ Election poll micro-simulator in C++20: generates a synthetic voter population, 
 
 ```bash
 cmake -S . -B build && cmake --build build
-./build/poll_sim          # ~55 s in Release; output is deterministic (fixed seeds)
+./build/poll_sim          # ~75 s in Release; output is deterministic (fixed seeds)
 ```
 
 No test suite yet. Verify changes by building with zero warnings and checking the printed tables.
@@ -29,6 +29,6 @@ No test suite yet. Verify changes by building with zero warnings and checking th
 
 ## Docs to keep in sync
 
-- `docs/experiments.md` quotes actual output numbers. If parameters or simulation logic change, rerun and update them.
 - `docs/design.md` describes methods and module layout; update when adding modules or methods.
-- `docs/roadmap.md` lists planned work; next step is the MNAR non-response scenario.
+- `docs/concepts.md` introduces sampling/weighting methods and terminology for non-specialists; update when adding a method or a new concept. No output numbers in docs.
+- `docs/roadmap.md` lists planned work; next step is turnout (voters vs. election result as two true values).

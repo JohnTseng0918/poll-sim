@@ -19,7 +19,7 @@ std::vector<PollResult> run_experiment(const std::vector<Voter>& population,
 
     // Built once per experiment and shared by every replication.
     std::vector<std::size_t> frame;
-    if (method == SamplingMethod::Landline) {
+    if (method == SamplingMethod::Landline || method == SamplingMethod::LandlineMNAR) {
         frame = build_landline_frame(population);
     } else if (method == SamplingMethod::Mobile) {
         frame = build_mobile_frame(population);
@@ -34,6 +34,10 @@ std::vector<PollResult> run_experiment(const std::vector<Voter>& population,
                 break;
             case SamplingMethod::Landline:
                 sample = landline_sample(population, frame, params.response_rate, sample_size, rng);
+                break;
+            case SamplingMethod::LandlineMNAR:
+                sample = landline_sample(population, frame, params.landline_mnar_response_rate,
+                                         sample_size, rng);
                 break;
             case SamplingMethod::Mobile:
                 sample = mobile_sample(population, frame, params.mobile_response_rate,

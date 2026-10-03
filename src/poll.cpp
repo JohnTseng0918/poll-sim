@@ -46,6 +46,25 @@ Arr<double, kCandidateCount> population_vote_share(const std::vector<Voter>& pop
     return shares;
 }
 
+Arr<Arr<double, kCandidateCount>, kAgeGroupCount> population_age_vote_share(
+    const std::vector<Voter>& population) {
+    Arr<Arr<std::size_t, kCandidateCount>, kAgeGroupCount> counts{};
+    Arr<std::size_t, kAgeGroupCount> age_counts{};
+    for (const Voter& voter : population) {
+        const auto a = static_cast<std::size_t>(voter.age);
+        ++counts[a][static_cast<std::size_t>(voter.candidate)];
+        ++age_counts[a];
+    }
+
+    Arr<Arr<double, kCandidateCount>, kAgeGroupCount> shares{};
+    for (std::size_t a = 0; a < kAgeGroupCount; ++a) {
+        for (std::size_t c = 0; c < kCandidateCount; ++c) {
+            shares[a][c] = static_cast<double>(counts[a][c]) / age_counts[a];
+        }
+    }
+    return shares;
+}
+
 Arr<double, kAgeGroupCount> population_age_share(const std::vector<Voter>& population) {
     Arr<std::size_t, kAgeGroupCount> counts{};
     for (const Voter& voter : population) {

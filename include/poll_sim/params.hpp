@@ -42,9 +42,20 @@ struct PopulationParams {
     // Different values within a row: response depends on vote intention (MNAR),
     // which weighting cannot fully correct.
     Arr<Arr<double, kCandidateCount>, kAgeGroupCount> response_rate{{
-        {0.05, 0.05, 0.05},  // Young
+        {0.10, 0.10, 0.10},  // Young
         {0.30, 0.30, 0.30},  // Middle
         {0.60, 0.60, 0.60},  // Senior
+    }};
+
+    // Landline response rate [age][candidate] for the MNAR scenario, polled from the same
+    // landline frame. Voters with a preferred candidate answer more often than undecided
+    // voters, and among the young KMT supporters answer more often than DPP supporters.
+    // Values are placeholders.
+    Arr<Arr<double, kCandidateCount>, kAgeGroupCount> landline_mnar_response_rate{{
+        // DPP  KMT   None
+        {0.10, 0.15, 0.05},  // Young
+        {0.35, 0.35, 0.20},  // Middle
+        {0.65, 0.65, 0.40},  // Senior
     }};
 
     // Coverage attributes are drawn from a separate random stream derived from seed,
@@ -131,6 +142,8 @@ inline void PopulationParams::validate() const {
         for (std::size_t c = 0; c < kCandidateCount; ++c) {
             const std::string cell = row + "[" + std::to_string(c) + "]";
             detail::check_probability(response_rate[a][c], "response_rate" + cell);
+            detail::check_probability(landline_mnar_response_rate[a][c],
+                                      "landline_mnar_response_rate" + cell);
             detail::check_probability(mobile_response_rate[a][c], "mobile_response_rate" + cell);
             detail::check_probability(landline_share[a][c], "landline_share" + cell);
             detail::check_distribution(phone_share[a][c], "phone_share" + cell);

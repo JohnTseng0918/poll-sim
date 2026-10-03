@@ -13,6 +13,7 @@ namespace poll_sim {
 enum class SamplingMethod {
     SimpleRandom,  // everyone drawn answers
     Landline,      // landline owners drawn answer with probability response_rate[age][candidate]
+    LandlineMNAR,  // same as Landline but with landline_mnar_response_rate[age][candidate]
     Mobile,        // phone numbers drawn; owners answer with mobile_response_rate[age][candidate]
 };
 
@@ -20,6 +21,7 @@ constexpr std::string_view to_string(SamplingMethod v) noexcept {
     switch (v) {
         case SamplingMethod::SimpleRandom: return "SimpleRandom";
         case SamplingMethod::Landline: return "Landline";
+        case SamplingMethod::LandlineMNAR: return "LandlineMNAR";
         case SamplingMethod::Mobile: return "Mobile";
     }
     return "Unknown";

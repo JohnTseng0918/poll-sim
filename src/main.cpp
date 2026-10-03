@@ -101,17 +101,20 @@ struct Approach {
     Estimator estimator;
 };
 
-inline constexpr Arr<Approach, 6> kApproaches{{
+inline constexpr Arr<Approach, 8> kApproaches{{
     {"SimpleRandom", SamplingMethod::SimpleRandom, Estimator::Unweighted},
     {"Landline", SamplingMethod::Landline, Estimator::Unweighted},
     {"Landline+AgeWt", SamplingMethod::Landline, Estimator::AgeWeighted},
+    {"LandlineMNAR", SamplingMethod::LandlineMNAR, Estimator::Unweighted},
+    {"LandlineMNAR+AgeWt", SamplingMethod::LandlineMNAR, Estimator::AgeWeighted},
     {"Mobile", SamplingMethod::Mobile, Estimator::Unweighted},
     {"Mobile+MultWt", SamplingMethod::Mobile, Estimator::MultiplicityWeighted},
     {"Mobile+MultWt+AgeWt", SamplingMethod::Mobile, Estimator::MultiplicityAgeWeighted},
 }};
 
-inline constexpr Arr<SamplingMethod, 3> kSamplingMethods{
-    SamplingMethod::SimpleRandom, SamplingMethod::Landline, SamplingMethod::Mobile};
+inline constexpr Arr<SamplingMethod, 4> kSamplingMethods{
+    SamplingMethod::SimpleRandom, SamplingMethod::Landline, SamplingMethod::LandlineMNAR,
+    SamplingMethod::Mobile};
 
 Estimate estimate_with(Estimator estimator, const PollResult& result, Candidate candidate,
                        const Arr<double, kAgeGroupCount>& age_share) {
@@ -132,6 +135,9 @@ Estimate estimate_with(Estimator estimator, const PollResult& result, Candidate 
 struct LandlineDiagnostics {
     double response_rate = 0.0;
     Arr<double, kAgeGroupCount> respondent_age_share{};
+    // Vote share within each age group's respondents [age][candidate],
+    // pooled over replications (0 if an age group never responded).
+    Arr<Arr<double, kCandidateCount>, kAgeGroupCount> respondent_vote_share{};
     double young_respondents = 0.0;
     double effective_size = 0.0;     // Kish effective sample size after age weighting
     double empty_age_fraction = 0.0; // fraction of polls with an age group lacking respondents
@@ -152,6 +158,7 @@ struct SampleSizeResult {
     // summaries[approach][candidate]
     Arr<Arr<Summary, kCandidateCount>, kApproaches.size()> summaries{};
     LandlineDiagnostics landline;
+    LandlineDiagnostics landline_mnar;
     MobileDiagnostics mobile;
 };
 
@@ -159,10 +166,16 @@ LandlineDiagnostics diagnose_landline(const std::vector<PollResult>& results,
                                       const Arr<double, kAgeGroupCount>& age_share) {
     LandlineDiagnostics d;
     std::size_t empty = 0;
+    Arr<Arr<std::size_t, kCandidateCount>, kAgeGroupCount> cell_totals{};
+    Arr<std::size_t, kAgeGroupCount> age_totals{};
     for (const PollResult& result : results) {
         d.response_rate += result.response_rate();
         for (std::size_t a = 0; a < kAgeGroupCount; ++a) {
             d.respondent_age_share[a] += result.share(static_cast<AgeGroup>(a));
+            age_totals[a] += result.age_counts[a];
+            for (std::size_t c = 0; c < kCandidateCount; ++c) {
+                cell_totals[a][c] += result.cell_counts[a][c];
+            }
         }
         d.young_respondents +=
             static_cast<double>(result.age_counts[static_cast<std::size_t>(AgeGroup::Young)]);
@@ -179,6 +192,14 @@ LandlineDiagnostics diagnose_landline(const std::vector<PollResult>& results,
     d.response_rate /= replications;
     for (double& share : d.respondent_age_share) {
         share /= replications;
+    }
+    for (std::size_t a = 0; a < kAgeGroupCount; ++a) {
+        for (std::size_t c = 0; c < kCandidateCount; ++c) {
+            if (age_totals[a] > 0) {
+                d.respondent_vote_share[a][c] =
+                    static_cast<double>(cell_totals[a][c]) / age_totals[a];
+            }
+        }
     }
     d.young_respondents /= replications;
     d.effective_size /= replications;
@@ -210,12 +231,13 @@ MobileDiagnostics diagnose_mobile(const std::vector<PollResult>& results,
     return d;
 }
 
-// Prints the landline response rate, respondent age mix, and age weights,
+// Prints the response rate, respondent age mix, and age weights of one landline scenario,
 // followed by how age weighting shrinks the effective sample size at each n.
-void print_landline_diagnostics(const std::vector<SampleSizeResult>& rows,
+void print_landline_diagnostics(std::string_view name, const std::vector<SampleSizeResult>& rows,
+                                LandlineDiagnostics SampleSizeResult::*scenario,
                                 const Arr<double, kAgeGroupCount>& age_share) {
-    const LandlineDiagnostics& last = rows.back().landline;
-    std::cout << "Landline respondents (n = " << rows.back().sample_size
+    const LandlineDiagnostics& last = rows.back().*scenario;
+    std::cout << name << " respondents (n = " << rows.back().sample_size
               << ", mean over replications)\n";
     std::cout << "  Response rate " << std::fixed << std::setprecision(2)
               << last.response_rate * 100.0 << "%\n";
@@ -230,11 +252,11 @@ void print_landline_diagnostics(const std::vector<SampleSizeResult>& rows,
     }
     std::cout << '\n';
 
-    std::cout << "Age weighting cost (mean over replications)\n";
+    std::cout << name << " age weighting cost (mean over replications)\n";
     std::cout << std::setw(10) << "n" << std::setw(10) << "Young" << std::setw(10) << "Eff. n"
               << std::setw(8) << "Deff" << std::setw(10) << "EmptyAge" << '\n';
     for (const SampleSizeResult& row : rows) {
-        const LandlineDiagnostics& d = row.landline;
+        const LandlineDiagnostics& d = row.*scenario;
         std::cout << std::setw(10) << row.sample_size << std::setw(10) << d.young_respondents
                   << std::setw(10) << d.effective_size << std::setw(8)
                   << row.sample_size / d.effective_size << std::setw(9)
@@ -242,6 +264,41 @@ void print_landline_diagnostics(const std::vector<SampleSizeResult>& rows,
     }
     std::cout << "  Young = Young respondents, Eff. n = Kish effective sample size,\n"
               << "  Deff = n / Eff. n, EmptyAge = polls with an age group lacking respondents\n\n";
+}
+
+// Prints the vote share within each age group for the population and for the respondents
+// of each landline scenario. Age weighting only rescales age groups, so it cannot fix
+// a gap between the population and the respondents within an age group.
+void print_respondent_vote_share(
+    const std::vector<SampleSizeResult>& rows,
+    const Arr<Arr<double, kCandidateCount>, kAgeGroupCount>& age_vote_share) {
+    const SampleSizeResult& last = rows.back();
+    std::cout << "Vote share within each age group (n = " << last.sample_size
+              << ", respondents pooled over replications)\n";
+    std::cout << "  " << std::left << std::setw(10) << "Age" << std::setw(24) << "     Population"
+              << std::setw(24) << "     Landline" << "     LandlineMNAR" << '\n';
+    std::cout << "  " << std::setw(10) << "" << std::right;
+    for (int group = 0; group < 3; ++group) {
+        for (std::size_t c = 0; c < kCandidateCount; ++c) {
+            std::cout << std::setw(8) << to_string(static_cast<Candidate>(c));
+        }
+    }
+    std::cout << '\n';
+
+    const auto print_group = [](const Arr<double, kCandidateCount>& shares) {
+        for (double share : shares) {
+            std::cout << std::setw(8) << share * 100.0;
+        }
+    };
+    for (std::size_t a = 0; a < kAgeGroupCount; ++a) {
+        std::cout << "  " << std::left << std::setw(10) << to_string(static_cast<AgeGroup>(a))
+                  << std::right << std::fixed << std::setprecision(2);
+        print_group(age_vote_share[a]);
+        print_group(last.landline.respondent_vote_share[a]);
+        print_group(last.landline_mnar.respondent_vote_share[a]);
+        std::cout << '\n';
+    }
+    std::cout << '\n';
 }
 
 // Prints the mobile response rate and respondent age mix,
@@ -316,6 +373,8 @@ void print_sample_size_tables(const std::vector<SampleSizeResult>& rows) {
               << "  Coverage = 95% CIs (estimate +/- 1.96 SE) containing True,\n"
               << "  Within3 = estimates within +/-3 points of True,\n"
               << "  Landline+AgeWt = same landline polls, post-stratified by age,\n"
+              << "  LandlineMNAR = landline polls whose response rate also depends on the\n"
+              << "    candidate (MNAR), LandlineMNAR+AgeWt = same polls, post-stratified by age,\n"
               << "  Mobile+MultWt = mobile polls weighted by 1 / phones,\n"
               << "  Mobile+MultWt+AgeWt = multiplicity weights, then post-stratified by age\n";
 }
@@ -386,6 +445,8 @@ int main() {
                 }
                 if (method == SamplingMethod::Landline) {
                     row.landline = diagnose_landline(results, age_share);
+                } else if (method == SamplingMethod::LandlineMNAR) {
+                    row.landline_mnar = diagnose_landline(results, age_share);
                 } else if (method == SamplingMethod::Mobile) {
                     row.mobile = diagnose_mobile(results, age_share);
                 }
@@ -395,7 +456,10 @@ int main() {
         std::cout << '\n';
 
         if (!rows.empty()) {
-            print_landline_diagnostics(rows, age_share);
+            print_landline_diagnostics("Landline", rows, &SampleSizeResult::landline, age_share);
+            print_landline_diagnostics("LandlineMNAR", rows, &SampleSizeResult::landline_mnar,
+                                       age_share);
+            print_respondent_vote_share(rows, population_age_vote_share(population));
             print_mobile_diagnostics(rows, age_share);
             std::cout << "(values in %)\n";
             print_sample_size_tables(rows);

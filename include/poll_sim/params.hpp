@@ -15,6 +15,9 @@ namespace poll_sim {
 template <class T, std::size_t N>
 using Arr = std::array<T, N>;
 
+// Upper bound on mobile phones per voter; "kMaxPhones or more" is folded into kMaxPhones.
+inline constexpr std::size_t kMaxPhones = 3;
+
 // Population parameters: composition and behavior of the synthetic voter population.
 struct PopulationParams {
     std::size_t size = 10'000'000;
@@ -42,6 +45,28 @@ struct PopulationParams {
         {0.05, 0.05, 0.05},  // Young
         {0.30, 0.30, 0.30},  // Middle
         {0.60, 0.60, 0.60},  // Senior
+    }};
+
+    // Coverage attributes are drawn from a separate random stream derived from seed,
+    // so changing them leaves age, region, gender and vote intention unchanged.
+
+    // Probability of having a landline [age][candidate].
+    // 1.0 everywhere: everyone is reachable by landline, and response_rate alone
+    // decides who answers.
+    Arr<Arr<double, kCandidateCount>, kAgeGroupCount> landline_share{{
+        {1.0, 1.0, 1.0},  // Young
+        {1.0, 1.0, 1.0},  // Middle
+        {1.0, 1.0, 1.0},  // Senior
+    }};
+
+    // Distribution of mobile phone count [age][candidate][k], k = 0..kMaxPhones;
+    // each row sums to 1. Equal rows within an age group: phone count depends on age only.
+    // Values are placeholders.
+    using PhoneDist = Arr<double, kMaxPhones + 1>;
+    Arr<Arr<PhoneDist, kCandidateCount>, kAgeGroupCount> phone_share{{
+        {{{0.01, 0.80, 0.15, 0.04}, {0.01, 0.80, 0.15, 0.04}, {0.01, 0.80, 0.15, 0.04}}},
+        {{{0.02, 0.83, 0.12, 0.03}, {0.02, 0.83, 0.12, 0.03}, {0.02, 0.83, 0.12, 0.03}}},
+        {{{0.10, 0.80, 0.08, 0.02}, {0.10, 0.80, 0.08, 0.02}, {0.10, 0.80, 0.08, 0.02}}},
     }};
 
     // Throws std::invalid_argument if any parameter is invalid.
@@ -93,8 +118,10 @@ inline void PopulationParams::validate() const {
         const std::string row = "[" + std::to_string(a) + "]";
         detail::check_distribution(vote_share[a], "vote_share" + row);
         for (std::size_t c = 0; c < kCandidateCount; ++c) {
-            detail::check_probability(response_rate[a][c],
-                                      "response_rate" + row + "[" + std::to_string(c) + "]");
+            const std::string cell = row + "[" + std::to_string(c) + "]";
+            detail::check_probability(response_rate[a][c], "response_rate" + cell);
+            detail::check_probability(landline_share[a][c], "landline_share" + cell);
+            detail::check_distribution(phone_share[a][c], "phone_share" + cell);
         }
     }
 }

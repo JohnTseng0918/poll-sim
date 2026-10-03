@@ -12,7 +12,7 @@ namespace poll_sim {
 
 enum class SamplingMethod {
     SimpleRandom,  // everyone drawn answers
-    Landline,      // drawn voters answer with probability response_rate[age][candidate]
+    Landline,      // landline owners drawn answer with probability response_rate[age][candidate]
 };
 
 constexpr std::string_view to_string(SamplingMethod v) noexcept {
@@ -35,11 +35,21 @@ struct Sample {
 Sample simple_random_sample(const std::vector<Voter>& population, std::size_t n,
                             std::mt19937_64& rng);
 
-// Simulates a landline poll: keeps contacting distinct random voters until n of them respond.
-// Each contacted voter responds with probability response_rate[age][candidate];
-// voters who do not respond are never contacted again.
-// Throws std::invalid_argument if the population runs out before n voters respond.
+// A sampling frame lists phone numbers; frame[k] is the index of the voter owning number k.
+
+// Landline frame: one number per voter with a landline.
+// Simplification: real landlines are shared by a household; here each owner has their own.
+std::vector<std::size_t> build_landline_frame(const std::vector<Voter>& population);
+
+// Mobile frame: one number per mobile phone, so a voter with k phones appears k times.
+std::vector<std::size_t> build_mobile_frame(const std::vector<Voter>& population);
+
+// Simulates a landline poll: keeps calling distinct random numbers from the landline frame
+// until n voters respond. Each voter called responds with probability
+// response_rate[age][candidate]; numbers that do not respond are never called again.
+// Throws std::invalid_argument if the frame runs out before n voters respond.
 Sample landline_sample(const std::vector<Voter>& population,
+                       const std::vector<std::size_t>& frame,
                        const Arr<Arr<double, kCandidateCount>, kAgeGroupCount>& response_rate,
                        std::size_t n, std::mt19937_64& rng);
 

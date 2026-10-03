@@ -33,9 +33,18 @@
 - 同一年齡層各候選人的接聽率相同時，接聽只與年齡有關（MAR），依年齡加權即可修正偏差。
 - 接聽率依投票意向而不同時（MNAR），加權無法完全修正，可用來觀察加權的極限。
 
+**電話涵蓋**：每位選民另有兩個屬性，決定能否被各種電話調查抽到。
+
+- `has_landline`：是否有市話，機率為 `landline_share[年齡][候選人]`。預設全部為 1.0（每人都有市話），此時市話調查的結果與加入此屬性前完全相同。
+- `phones`：手機數量 0 到 `kMaxPhones`（3，代表 3 支以上），分布為 `phone_share[年齡][候選人]`。目前為暫定值，且同一年齡層各候選人相同（手機數量只與年齡有關）。
+- 沒有市話的人不會被市話調查抽到，0 支手機的人不會被手機調查抽到，形成涵蓋偏差；這和「抽到但不接」的無回應偏差是不同機制。
+- 簡化假設：真實的市話是一戶共用一支，家中人數越多，每人被抽中的機率越低；這裡假設每位有市話的人各有一支號碼。
+
+這兩個屬性使用由母體 seed 衍生的另一條亂數序列產生，因此修改相關參數不會改變年齡、地區、性別與投票傾向。
+
 所有參數集中在 `include/poll_sim/params.hpp`：
 
-- `PopulationParams`：母體大小、各維度比例、投票傾向、接聽率、母體 seed。
+- `PopulationParams`：母體大小、各維度比例、投票傾向、接聽率、市話擁有率、手機數量分布、母體 seed。
 - `SimParams`：要測試的樣本數清單 `sample_sizes`、重複次數 `replications`、抽樣 seed。
 
 母體與抽樣使用不同的 seed，可以固定母體、只改變抽樣。
@@ -54,7 +63,12 @@
 | 方法 | 說明 |
 |---|---|
 | SimpleRandom | 不重複隨機抽出 n 人，抽到重複就重抽；每個人都回答（理想情況） |
-| Landline | 不斷隨機撥打未撥過的選民，每人依 `response_rate[年齡][候選人]` 決定是否接聽，直到湊滿 n 位受訪者；拒接者不會再被撥打 |
+| Landline | 從市話名單中不斷隨機撥打未撥過的號碼，每人依 `response_rate[年齡][候選人]` 決定是否接聽，直到湊滿 n 位受訪者；拒接者不會再被撥打 |
+
+**抽樣底冊（電話號碼名單）**：名單的第 k 筆記錄號碼 k 屬於哪位選民（母體索引），由母體直接推導。
+
+- 市話名單：每位有市話的選民一筆。
+- 手機名單：每支手機一筆，有 k 支手機的選民出現 k 次，被抽中的機率也是 k 倍（預設參數下約 1,129 萬筆）。目前只建立名單，手機調查尚未實作。
 
 ## 估計方法
 
@@ -72,10 +86,10 @@
 | 模組 | 職責 |
 |---|---|
 | `types` | `AgeGroup`、`Region`、`Gender`、`Candidate` 列舉與 `to_string` |
-| `voter` | 選民結構 `Voter` |
+| `voter` | 選民結構 `Voter`（人口屬性、投票傾向、市話與手機數量） |
 | `params` | `PopulationParams`、`SimParams` 與參數驗證 |
 | `population` | `generate_population`：依參數生成母體 |
-| `sampling` | `SamplingMethod`、`simple_random_sample`、`landline_sample` |
+| `sampling` | `SamplingMethod`、市話與手機名單（`build_landline_frame`、`build_mobile_frame`）、`simple_random_sample`、`landline_sample` |
 | `poll` | `PollResult`（各候選人、年齡層、年齡 × 候選人人數）、`tally`、母體真值計算 |
 | `experiment` | `run_experiment`：以指定抽樣方法重複執行民調 |
 | `estimate` | `Estimate`、未加權與年齡加權估計、Kish 有效樣本數 |

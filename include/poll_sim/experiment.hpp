@@ -11,7 +11,8 @@
 namespace poll_sim {
 
 // Runs sim.replications independent polls of sample_size respondents using the given method,
-// seeded with sim.seed. Landline polls use params.response_rate.
+// seeded with sim.seed. Landline polls draw from the voters with a landline
+// and use params.response_rate.
 // Returns one PollResult per replication.
 // Throws std::invalid_argument if sample_size or replications is 0,
 // or the population cannot supply sample_size respondents.

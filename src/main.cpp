@@ -4,6 +4,7 @@
 #include <iomanip>
 #include <iostream>
 #include <stdexcept>
+#include <string>
 #include <string_view>
 #include <vector>
 
@@ -46,6 +47,44 @@ Arr<double, kCandidateCount> expected_vote_share(const PopulationParams& params)
         }
     }
     return result;
+}
+
+// Prints landline ownership and the mobile phone count distribution against their
+// theoretical values, followed by the size of each sampling frame.
+void print_coverage(const std::vector<Voter>& population, const PopulationParams& params) {
+    double expected_landline = 0.0;
+    Arr<double, kMaxPhones + 1> expected_phones{};
+    for (std::size_t a = 0; a < kAgeGroupCount; ++a) {
+        for (std::size_t c = 0; c < kCandidateCount; ++c) {
+            const double cell = params.age_share[a] * params.vote_share[a][c];
+            expected_landline += cell * params.landline_share[a][c];
+            for (std::size_t k = 0; k <= kMaxPhones; ++k) {
+                expected_phones[k] += cell * params.phone_share[a][c][k];
+            }
+        }
+    }
+
+    std::size_t landline_count = 0;
+    Arr<std::size_t, kMaxPhones + 1> phone_counts{};
+    for (const Voter& voter : population) {
+        if (voter.has_landline) {
+            ++landline_count;
+        }
+        ++phone_counts[static_cast<std::size_t>(voter.phones)];
+    }
+
+    const auto size = static_cast<double>(population.size());
+    std::cout << "Coverage\n";
+    std::cout << "  " << std::left << std::setw(10) << "Landline" << std::right << std::fixed
+              << std::setprecision(4) << landline_count / size << "  (expected "
+              << expected_landline << ")\n";
+    for (std::size_t k = 0; k <= kMaxPhones; ++k) {
+        std::cout << "  " << std::left << std::setw(10)
+                  << (std::to_string(k) + (k == kMaxPhones ? "+" : "") + " phones") << std::right
+                  << phone_counts[k] / size << "  (expected " << expected_phones[k] << ")\n";
+    }
+    std::cout << "  Frames: landline " << build_landline_frame(population).size()
+              << " numbers, mobile " << build_mobile_frame(population).size() << " numbers\n";
 }
 
 // A sampling method combined with an estimator.
@@ -210,6 +249,7 @@ int main() {
                             [](const Voter& v) { return v.gender; });
         print_share<Candidate>("Candidate", population, expected_vote_share(params),
                                [](const Voter& v) { return v.candidate; });
+        print_coverage(population, params);
         std::cout << '\n';
 
         const Arr<double, kCandidateCount> true_shares = population_vote_share(population);

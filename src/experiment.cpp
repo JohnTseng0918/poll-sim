@@ -32,24 +32,28 @@ std::vector<PollResult> run_experiment(const std::vector<Voter>& population,
         }
     }
 
+    // Records the positions used by random draws; allocated once and reused by every poll.
+    UsedPositions used(method == SamplingMethod::SimpleRandom ? population.size()
+                                                              : frame.size());
+
     std::vector<PollResult> results;
     for (std::size_t r = 0; r < sim.replications; ++r) {
         Sample sample;
         switch (method) {
             case SamplingMethod::SimpleRandom:
-                sample = simple_random_sample(population, sample_size, sim.order, rng);
+                sample = simple_random_sample(population, sample_size, sim.order, used, rng);
                 break;
             case SamplingMethod::Landline:
                 sample = landline_sample(population, frame, params.response_rate, sample_size,
-                                         sim.order, rng);
+                                         sim.order, used, rng);
                 break;
             case SamplingMethod::LandlineMNAR:
                 sample = landline_sample(population, frame, params.landline_mnar_response_rate,
-                                         sample_size, sim.order, rng);
+                                         sample_size, sim.order, used, rng);
                 break;
             case SamplingMethod::Mobile:
                 sample = mobile_sample(population, frame, params.mobile_response_rate,
-                                       sample_size, sim.order, rng);
+                                       sample_size, sim.order, used, rng);
                 break;
         }
         results.push_back(tally(population, sample));

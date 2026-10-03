@@ -40,14 +40,37 @@ struct Sample {
     std::size_t duplicates = 0;
 };
 
+// Records which positions (voter indices or frame numbers) a poll has used, so that random
+// draws are made without replacement. One bit per position. Meant to be reused across polls:
+// clear() resets only the positions marked since the last clear, so its cost grows with the
+// number of draws rather than with the size.
+class UsedPositions {
+public:
+    explicit UsedPositions(std::size_t size);
+
+    // Marks a position as used. Returns false if it was already used.
+    bool insert(std::size_t position);
+    // Number of positions used since the last clear.
+    std::size_t count() const { return marked_.size(); }
+    // Number of positions that can be recorded.
+    std::size_t size() const { return used_.size(); }
+    void clear();
+
+private:
+    std::vector<bool> used_;
+    std::vector<std::size_t> marked_;
+};
+
 // Draws a simple random sample of n distinct voters (without replacement).
-// Random: draws random indices, redrawing any already drawn.
+// Random: draws random indices, redrawing any already drawn; records them in used, which must
+// cover the population and is cleared first.
 // Sequential: takes n consecutive voters from a random start, wrapping around to the first
 // voter; equivalent to Random only because the population is in random order.
+// used is not touched by Sequential.
 // Everyone drawn responds, so contacts == n. Every weight is 1.
-// Throws std::invalid_argument if n exceeds the population size.
+// Throws std::invalid_argument if n exceeds the population size, or used is too small.
 Sample simple_random_sample(const std::vector<Voter>& population, std::size_t n,
-                            DrawOrder order, std::mt19937_64& rng);
+                            DrawOrder order, UsedPositions& used, std::mt19937_64& rng);
 
 // A sampling frame lists phone numbers; frame[k] is the index of the voter owning number k.
 // Indices are stored as 32 bits to halve the frame size.
@@ -65,21 +88,26 @@ Frame build_mobile_frame(const std::vector<Voter>& population);
 // Simulates a landline poll: keeps calling distinct numbers from the landline frame
 // until n voters respond. Each voter called responds with probability
 // response_rate[age][candidate]; numbers that do not respond are never called again.
-// Random: calls random numbers. Sequential: calls consecutive numbers from a random position,
-// wrapping around; the frame must be in random order. Every weight is 1.
-// Throws std::invalid_argument if the frame runs out before n voters respond.
+// Random: calls random numbers, recording them in used, which must cover the frame and is
+// cleared first. Sequential: calls consecutive numbers from a random position, wrapping
+// around; the frame must be in random order, and used is not touched. Every weight is 1.
+// Throws std::invalid_argument if the frame runs out before n voters respond,
+// or used is too small.
 Sample landline_sample(const std::vector<Voter>& population, const Frame& frame,
                        const Arr<Arr<double, kCandidateCount>, kAgeGroupCount>& response_rate,
-                       std::size_t n, DrawOrder order, std::mt19937_64& rng);
+                       std::size_t n, DrawOrder order, UsedPositions& used,
+                       std::mt19937_64& rng);
 
 // Simulates a mobile poll: same as landline_sample but calls numbers from the mobile frame.
 // A voter with k phones is k times as likely to be called and may respond more than once
 // through different numbers; each respondent's weight is 1 / k.
 // For Sequential, shuffle the frame first: build_mobile_frame puts a voter's numbers next
 // to each other.
-// Throws std::invalid_argument if the frame runs out before n voters respond.
+// Throws std::invalid_argument if the frame runs out before n voters respond,
+// or used is too small.
 Sample mobile_sample(const std::vector<Voter>& population, const Frame& frame,
                      const Arr<Arr<double, kCandidateCount>, kAgeGroupCount>& response_rate,
-                     std::size_t n, DrawOrder order, std::mt19937_64& rng);
+                     std::size_t n, DrawOrder order, UsedPositions& used,
+                     std::mt19937_64& rng);
 
 }  // namespace poll_sim

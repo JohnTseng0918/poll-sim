@@ -6,8 +6,8 @@ Election poll micro-simulator in C++20: generates a synthetic voter population, 
 
 ```bash
 cmake --preset release && cmake --build --preset release
-./build/poll_sim          # ~60 s in Release; output is deterministic (fixed seeds)
-./build/poll_sim --order=sequential   # ~15 s; statistically equivalent, sequential memory access
+./build/poll_sim          # ~30 s in Release; output is deterministic (fixed seeds)
+./build/poll_sim --order=sequential   # ~10 s; statistically equivalent, sequential memory access
 ```
 
 Presets: `release` → `build/`, `profile` → `build-prof/` (Release flags + `-g -fno-omit-frame-pointer`, for `perf record -g`), `debug` → `build-debug/`. Without presets, pass `-DCMAKE_BUILD_TYPE=Profile` etc.; default is Release.
@@ -23,7 +23,7 @@ No test suite yet. Verify changes by building with zero warnings and checking th
 
 ## Conventions
 
-- **Naive first, no premature optimization.** The user wants to optimize memory/performance later themselves to feel the difference. Do not add `reserve`, bit-packing, SoA, or threading unless asked. (Done at the user's request so far: `std::uint8_t` enums, 32-bit frame indices, `reserve` for the phone frames, `--order=sequential`.)
+- **Naive first, no premature optimization.** The user wants to optimize memory/performance later themselves to feel the difference. Do not add `reserve`, bit-packing, SoA, or threading unless asked. (Done at the user's request so far: `std::uint8_t` enums, 32-bit frame indices, `reserve` for the phone frames, `--order=sequential`, bitmap instead of hash sets for random draws, duplicates counted by sorting after each poll.)
 - Code comments in English; docs (`README.md`, `docs/`) in Traditional Chinese.
 - Everything lives in `namespace poll_sim`. Enums are contiguous from 0 and are used directly as array indices; each has a `k*Count` constant and `to_string`.
 - All tunable parameters live in `include/poll_sim/params.hpp`. Invalid input throws `std::invalid_argument`.

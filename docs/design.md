@@ -100,7 +100,7 @@
 市話與手機共用同一段撥號邏輯，只差在名單、接聽率與設計權重。
 
 - 未撥過的是「號碼」而不是「人」：有多支手機的人拒接一個號碼後，仍可能經由另一個號碼被撥打，並重新決定是否接聽。
-- 同一人經由不同號碼接聽兩次時，兩次回答都計入樣本，並記錄為重複受訪（實際的民調通常無法辨識）。
+- 同一人經由不同號碼接聽兩次時，兩次回答都計入樣本，並記錄為重複受訪（實際的民調通常無法辨識）。重複次數在民調結束後，將受訪者編號排序後計算。
 
 **抽樣底冊（電話號碼名單）**：名單的第 k 筆記錄號碼 k 屬於哪位選民（母體索引，以 32 位元儲存），由母體直接推導。
 
@@ -111,12 +111,12 @@
 
 | 順序 | 做法 |
 |---|---|
-| Random（預設） | 隨機抽位置，抽到已用過的就重抽，以 hash set 記錄抽過的位置 |
+| Random（預設） | 隨機抽位置，抽到已用過的就重抽；以 bitmap（`UsedPositions`，每個位置 1 bit）記錄用過的位置，同一實驗的各次民調共用，每次只清除用過的位置 |
 | Sequential | 隨機選一個起點，依序往下取（到尾端繞回開頭），直到湊滿樣本；連續的位置不會重複，不需要記錄 |
 
 - 依序抽取只在母體與名單的順序為隨機時才等同隨機抽樣：`generate_population` 逐一獨立產生選民，市話名單沿用母體順序，因此成立。若母體改為依屬性排序，依序抽取會產生嚴重偏差。
 - 手機名單中同一人的號碼相鄰，Sequential 時會先以另一條由抽樣 seed 衍生的亂數序列洗牌，避免同一人的多支手機被接連撥到。
-- 兩種順序的統計性質相同，差別在記憶體存取模式：Sequential 依序讀取名單或母體、不需要 hash set，用來觀察存取模式對效能的影響。洗牌後的手機名單仍會隨機存取母體。
+- 兩種順序的統計性質相同，差別在記憶體存取模式：Sequential 依序讀取名單或母體、不需要記錄用過的位置，用來觀察存取模式對效能的影響。洗牌後的手機名單仍會隨機存取母體。
 - Random 模式的輸出與加入此選項前完全相同。
 
 ## 估計方法
@@ -150,7 +150,7 @@
 | `voter` | 選民結構 `Voter`（人口屬性、投票傾向、市話與手機數量） |
 | `params` | `PopulationParams`、`SimParams` 與參數驗證 |
 | `population` | `generate_population`：依參數生成母體 |
-| `sampling` | `SamplingMethod`、市話與手機名單（`build_landline_frame`、`build_mobile_frame`）、`simple_random_sample`、`landline_sample`、`mobile_sample`（皆可指定 `DrawOrder`） |
+| `sampling` | `SamplingMethod`、市話與手機名單（`build_landline_frame`、`build_mobile_frame`）、`simple_random_sample`、`landline_sample`、`mobile_sample`（皆可指定 `DrawOrder`）、`UsedPositions` |
 | `poll` | `PollResult`（各候選人、年齡層、年齡 × 候選人人數，以及設計權重總和）、`tally`、母體真值計算（含各年齡層內的支持比例） |
 | `experiment` | `run_experiment`：以指定抽樣方法重複執行民調 |
 | `estimate` | `Estimate`、未加權、年齡加權、多重性加權、多重性 + 年齡加權估計，以及 Kish 有效樣本數 |

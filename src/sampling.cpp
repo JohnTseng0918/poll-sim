@@ -80,7 +80,7 @@ std::size_t count_duplicates(std::vector<std::size_t> respondents) {
     return static_cast<std::size_t>(respondents.end() - distinct);
 }
 
-// Fills respondents, contacts and duplicates; the caller sets the weights.
+// Fills respondents and contacts; the caller sets the weights and duplicates.
 Sample phone_sample(const Frame& frame,
                     const Arr<Arr<double, kCandidateCount>, kAgeGroupCount>& response_rate,
                     std::size_t n, DrawOrder order, UsedPositions& used, std::mt19937_64& rng) {
@@ -97,7 +97,6 @@ Sample phone_sample(const Frame& frame,
             sample = sequential_phone_sample(frame, response_rate, n, rng);
             break;
     }
-    sample.duplicates = count_duplicates(sample.respondents);
     return sample;
 }
 
@@ -213,6 +212,7 @@ Sample landline_sample(const Frame& frame,
                        std::mt19937_64& rng) {
     Sample sample = phone_sample(frame, response_rate, n, order, used, rng);
     sample.weights.assign(sample.respondents.size(), 1.0);
+    // Each voter has a single landline number, so nobody can respond twice: duplicates stays 0.
     return sample;
 }
 
@@ -224,6 +224,7 @@ Sample mobile_sample(const std::vector<Voter>& population, const Frame& frame,
     for (std::size_t index : sample.respondents) {
         sample.weights.push_back(1.0 / population[index].phones);
     }
+    sample.duplicates = count_duplicates(sample.respondents);
     return sample;
 }
 

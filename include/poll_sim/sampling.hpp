@@ -13,12 +13,14 @@ namespace poll_sim {
 enum class SamplingMethod {
     SimpleRandom,  // everyone drawn answers
     Landline,      // landline owners drawn answer with probability response_rate[age][candidate]
+    Mobile,        // phone numbers drawn; owners answer with mobile_response_rate[age][candidate]
 };
 
 constexpr std::string_view to_string(SamplingMethod v) noexcept {
     switch (v) {
         case SamplingMethod::SimpleRandom: return "SimpleRandom";
         case SamplingMethod::Landline: return "Landline";
+        case SamplingMethod::Mobile: return "Mobile";
     }
     return "Unknown";
 }
@@ -26,11 +28,17 @@ constexpr std::string_view to_string(SamplingMethod v) noexcept {
 // Voters who completed the poll, plus how many voters were contacted to get them.
 struct Sample {
     std::vector<std::size_t> respondents;  // indices into the population
+    // Design weight of each respondent, parallel to respondents:
+    // 1 for SimpleRandom and Landline, 1 / phones for Mobile (multiplicity weight).
+    std::vector<double> weights;
     std::size_t contacts = 0;
+    // Responses from a voter who had already responded through another number.
+    // Such voters are counted once per response.
+    std::size_t duplicates = 0;
 };
 
 // Draws a simple random sample of n distinct voters (without replacement).
-// Everyone drawn responds, so contacts == n.
+// Everyone drawn responds, so contacts == n. Every weight is 1.
 // Throws std::invalid_argument if n exceeds the population size.
 Sample simple_random_sample(const std::vector<Voter>& population, std::size_t n,
                             std::mt19937_64& rng);
@@ -47,10 +55,19 @@ std::vector<std::size_t> build_mobile_frame(const std::vector<Voter>& population
 // Simulates a landline poll: keeps calling distinct random numbers from the landline frame
 // until n voters respond. Each voter called responds with probability
 // response_rate[age][candidate]; numbers that do not respond are never called again.
+// Every weight is 1.
 // Throws std::invalid_argument if the frame runs out before n voters respond.
 Sample landline_sample(const std::vector<Voter>& population,
                        const std::vector<std::size_t>& frame,
                        const Arr<Arr<double, kCandidateCount>, kAgeGroupCount>& response_rate,
                        std::size_t n, std::mt19937_64& rng);
+
+// Simulates a mobile poll: same as landline_sample but calls numbers from the mobile frame.
+// A voter with k phones is k times as likely to be called and may respond more than once
+// through different numbers; each respondent's weight is 1 / k.
+// Throws std::invalid_argument if the frame runs out before n voters respond.
+Sample mobile_sample(const std::vector<Voter>& population, const std::vector<std::size_t>& frame,
+                     const Arr<Arr<double, kCandidateCount>, kAgeGroupCount>& response_rate,
+                     std::size_t n, std::mt19937_64& rng);
 
 }  // namespace poll_sim

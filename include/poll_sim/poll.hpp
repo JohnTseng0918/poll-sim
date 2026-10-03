@@ -15,8 +15,13 @@ struct PollResult {
     Arr<std::size_t, kAgeGroupCount> age_counts{};  // respondents per age group
     // respondents per [age][candidate]
     Arr<Arr<std::size_t, kCandidateCount>, kAgeGroupCount> cell_counts{};
+    // Sum of design weights per [age][candidate], and sum of squared weights per age group.
+    // Equal to the counts when every weight is 1.
+    Arr<Arr<double, kCandidateCount>, kAgeGroupCount> cell_weights{};
+    Arr<double, kAgeGroupCount> age_weight_squares{};
     std::size_t sample_size = 0;                    // number of respondents
     std::size_t contacts = 0;                       // number of voters contacted
+    std::size_t duplicates = 0;                     // repeat responses from the same voter
 
     // Fraction of the sample supporting the given candidate.
     double share(Candidate candidate) const;
@@ -26,7 +31,7 @@ struct PollResult {
     double response_rate() const;
 };
 
-// Counts the votes and age groups of the respondents.
+// Counts the votes and age groups of the respondents and sums their design weights.
 PollResult tally(const std::vector<Voter>& population, const Sample& sample);
 
 // Actual vote share of each candidate across the whole population.

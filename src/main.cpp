@@ -87,21 +87,46 @@ void print_coverage(const std::vector<Voter>& population, const PopulationParams
               << " numbers, mobile " << build_mobile_frame(population).size() << " numbers\n";
 }
 
+enum class Estimator {
+    Unweighted,
+    AgeWeighted,
+    MultiplicityWeighted,
+    MultiplicityAgeWeighted,
+};
+
 // A sampling method combined with an estimator.
 struct Approach {
     std::string_view name;
     SamplingMethod sampling;
-    bool age_weighted;
+    Estimator estimator;
 };
 
-inline constexpr Arr<Approach, 3> kApproaches{{
-    {"SimpleRandom", SamplingMethod::SimpleRandom, false},
-    {"Landline", SamplingMethod::Landline, false},
-    {"Landline+AgeWt", SamplingMethod::Landline, true},
+inline constexpr Arr<Approach, 6> kApproaches{{
+    {"SimpleRandom", SamplingMethod::SimpleRandom, Estimator::Unweighted},
+    {"Landline", SamplingMethod::Landline, Estimator::Unweighted},
+    {"Landline+AgeWt", SamplingMethod::Landline, Estimator::AgeWeighted},
+    {"Mobile", SamplingMethod::Mobile, Estimator::Unweighted},
+    {"Mobile+MultWt", SamplingMethod::Mobile, Estimator::MultiplicityWeighted},
+    {"Mobile+MultWt+AgeWt", SamplingMethod::Mobile, Estimator::MultiplicityAgeWeighted},
 }};
 
-inline constexpr Arr<SamplingMethod, 2> kSamplingMethods{SamplingMethod::SimpleRandom,
-                                                        SamplingMethod::Landline};
+inline constexpr Arr<SamplingMethod, 3> kSamplingMethods{
+    SamplingMethod::SimpleRandom, SamplingMethod::Landline, SamplingMethod::Mobile};
+
+Estimate estimate_with(Estimator estimator, const PollResult& result, Candidate candidate,
+                       const Arr<double, kAgeGroupCount>& age_share) {
+    switch (estimator) {
+        case Estimator::Unweighted:
+            return unweighted_estimate(result, candidate);
+        case Estimator::AgeWeighted:
+            return age_weighted_estimate(result, candidate, age_share);
+        case Estimator::MultiplicityWeighted:
+            return multiplicity_weighted_estimate(result, candidate);
+        case Estimator::MultiplicityAgeWeighted:
+            return multiplicity_age_weighted_estimate(result, candidate, age_share);
+    }
+    return {};
+}
 
 // Landline poll diagnostics at one sample size, averaged over replications.
 struct LandlineDiagnostics {
@@ -112,12 +137,22 @@ struct LandlineDiagnostics {
     double empty_age_fraction = 0.0; // fraction of polls with an age group lacking respondents
 };
 
+// Mobile poll diagnostics at one sample size, averaged over replications.
+struct MobileDiagnostics {
+    double response_rate = 0.0;
+    Arr<double, kAgeGroupCount> respondent_age_share{};
+    double multiplicity_effective_size = 0.0;  // Kish n_eff with multiplicity weights
+    double combined_effective_size = 0.0;      // Kish n_eff with multiplicity and age weights
+    double duplicates = 0.0;                   // repeat responses per poll
+};
+
 // Results of every approach at one sample size.
 struct SampleSizeResult {
     std::size_t sample_size = 0;
     // summaries[approach][candidate]
     Arr<Arr<Summary, kCandidateCount>, kApproaches.size()> summaries{};
     LandlineDiagnostics landline;
+    MobileDiagnostics mobile;
 };
 
 LandlineDiagnostics diagnose_landline(const std::vector<PollResult>& results,
@@ -148,6 +183,30 @@ LandlineDiagnostics diagnose_landline(const std::vector<PollResult>& results,
     d.young_respondents /= replications;
     d.effective_size /= replications;
     d.empty_age_fraction = empty / replications;
+    return d;
+}
+
+MobileDiagnostics diagnose_mobile(const std::vector<PollResult>& results,
+                                  const Arr<double, kAgeGroupCount>& age_share) {
+    MobileDiagnostics d;
+    for (const PollResult& result : results) {
+        d.response_rate += result.response_rate();
+        for (std::size_t a = 0; a < kAgeGroupCount; ++a) {
+            d.respondent_age_share[a] += result.share(static_cast<AgeGroup>(a));
+        }
+        d.multiplicity_effective_size += multiplicity_weighted_effective_size(result);
+        d.combined_effective_size += multiplicity_age_weighted_effective_size(result, age_share);
+        d.duplicates += static_cast<double>(result.duplicates);
+    }
+
+    const double replications = static_cast<double>(results.size());
+    d.response_rate /= replications;
+    for (double& share : d.respondent_age_share) {
+        share /= replications;
+    }
+    d.multiplicity_effective_size /= replications;
+    d.combined_effective_size /= replications;
+    d.duplicates /= replications;
     return d;
 }
 
@@ -185,6 +244,41 @@ void print_landline_diagnostics(const std::vector<SampleSizeResult>& rows,
               << "  Deff = n / Eff. n, EmptyAge = polls with an age group lacking respondents\n\n";
 }
 
+// Prints the mobile response rate and respondent age mix,
+// followed by how multiplicity and age weighting shrink the effective sample size at each n.
+void print_mobile_diagnostics(const std::vector<SampleSizeResult>& rows,
+                              const Arr<double, kAgeGroupCount>& age_share) {
+    const MobileDiagnostics& last = rows.back().mobile;
+    std::cout << "Mobile respondents (n = " << rows.back().sample_size
+              << ", mean over replications)\n";
+    std::cout << "  Response rate " << std::fixed << std::setprecision(2)
+              << last.response_rate * 100.0 << "%\n";
+    std::cout << "  " << std::left << std::setw(10) << "Age" << std::right << std::setw(12)
+              << "Population" << std::setw(13) << "Respondents" << '\n';
+    for (std::size_t a = 0; a < kAgeGroupCount; ++a) {
+        std::cout << "  " << std::left << std::setw(10) << to_string(static_cast<AgeGroup>(a))
+                  << std::right << std::setw(12) << age_share[a] * 100.0 << std::setw(13)
+                  << last.respondent_age_share[a] * 100.0 << '\n';
+    }
+    std::cout << '\n';
+
+    std::cout << "Mobile weighting cost (mean over replications)\n";
+    std::cout << std::setw(10) << "n" << std::setw(12) << "Mult Eff. n" << std::setw(8) << "Deff"
+              << std::setw(12) << "+Age Eff. n" << std::setw(8) << "Deff" << std::setw(8)
+              << "Dup" << '\n';
+    for (const SampleSizeResult& row : rows) {
+        const MobileDiagnostics& d = row.mobile;
+        std::cout << std::setw(10) << row.sample_size << std::setw(12)
+                  << d.multiplicity_effective_size << std::setw(8)
+                  << row.sample_size / d.multiplicity_effective_size << std::setw(12)
+                  << d.combined_effective_size << std::setw(8)
+                  << row.sample_size / d.combined_effective_size << std::setw(8) << d.duplicates
+                  << '\n';
+    }
+    std::cout << "  Mult = multiplicity weights (1 / phones), +Age = then post-stratified by age,\n"
+              << "  Dup = repeat responses from the same voter per poll\n\n";
+}
+
 // Prints one table per candidate comparing the approaches across sample sizes.
 void print_sample_size_tables(const std::vector<SampleSizeResult>& rows) {
     const auto pct = [](double v) { return v * 100.0; };
@@ -194,7 +288,7 @@ void print_sample_size_tables(const std::vector<SampleSizeResult>& rows) {
         std::cout << "  " << to_string(candidate) << " (true " << std::fixed
                   << std::setprecision(2) << pct(rows.front().summaries[0][c].true_share)
                   << "%)\n";
-        std::cout << std::right << std::setw(10) << "n" << "  " << std::left << std::setw(16)
+        std::cout << std::right << std::setw(10) << "n" << "  " << std::left << std::setw(20)
                   << "Approach" << std::right << std::setw(8) << "Mean" << std::setw(8) << "Bias"
                   << std::setw(8) << "MoE" << std::setw(10) << "Coverage" << std::setw(9)
                   << "Within3" << '\n';
@@ -208,7 +302,7 @@ void print_sample_size_tables(const std::vector<SampleSizeResult>& rows) {
                 } else {
                     std::cout << "";
                 }
-                std::cout << "  " << std::left << std::setw(16) << kApproaches[m].name
+                std::cout << "  " << std::left << std::setw(20) << kApproaches[m].name
                           << std::right << std::setw(8) << pct(s.mean_estimate) << std::setw(8)
                           << pct(s.bias) << std::setw(8) << pct(s.margin_of_error)
                           << std::setw(10) << pct(s.coverage) << std::setw(9)
@@ -221,7 +315,9 @@ void print_sample_size_tables(const std::vector<SampleSizeResult>& rows) {
               << "  MoE = 1.96 * empirical SD of estimates,\n"
               << "  Coverage = 95% CIs (estimate +/- 1.96 SE) containing True,\n"
               << "  Within3 = estimates within +/-3 points of True,\n"
-              << "  Landline+AgeWt = same landline polls, post-stratified by age\n";
+              << "  Landline+AgeWt = same landline polls, post-stratified by age,\n"
+              << "  Mobile+MultWt = mobile polls weighted by 1 / phones,\n"
+              << "  Mobile+MultWt+AgeWt = multiplicity weights, then post-stratified by age\n";
 }
 
 }  // namespace
@@ -283,15 +379,15 @@ int main() {
                         std::vector<Estimate> estimates;
                         for (const PollResult& result : results) {
                             estimates.push_back(
-                                approach.age_weighted
-                                    ? age_weighted_estimate(result, candidate, age_share)
-                                    : unweighted_estimate(result, candidate));
+                                estimate_with(approach.estimator, result, candidate, age_share));
                         }
                         row.summaries[m][c] = summarize(estimates, true_shares[c]);
                     }
                 }
                 if (method == SamplingMethod::Landline) {
                     row.landline = diagnose_landline(results, age_share);
+                } else if (method == SamplingMethod::Mobile) {
+                    row.mobile = diagnose_mobile(results, age_share);
                 }
             }
             rows.push_back(row);
@@ -300,6 +396,7 @@ int main() {
 
         if (!rows.empty()) {
             print_landline_diagnostics(rows, age_share);
+            print_mobile_diagnostics(rows, age_share);
             std::cout << "(values in %)\n";
             print_sample_size_tables(rows);
         }

@@ -16,15 +16,20 @@ double PollResult::response_rate() const {
 
 PollResult tally(const std::vector<Voter>& population, const Sample& sample) {
     PollResult result;
-    for (std::size_t index : sample.respondents) {
-        const Voter& voter = population[index];
-        ++result.counts[static_cast<std::size_t>(voter.candidate)];
-        ++result.age_counts[static_cast<std::size_t>(voter.age)];
-        ++result.cell_counts[static_cast<std::size_t>(voter.age)]
-                            [static_cast<std::size_t>(voter.candidate)];
+    for (std::size_t i = 0; i < sample.respondents.size(); ++i) {
+        const Voter& voter = population[sample.respondents[i]];
+        const auto a = static_cast<std::size_t>(voter.age);
+        const auto c = static_cast<std::size_t>(voter.candidate);
+        const double w = sample.weights[i];
+        ++result.counts[c];
+        ++result.age_counts[a];
+        ++result.cell_counts[a][c];
+        result.cell_weights[a][c] += w;
+        result.age_weight_squares[a] += w * w;
     }
     result.sample_size = sample.respondents.size();
     result.contacts = sample.contacts;
+    result.duplicates = sample.duplicates;
     return result;
 }
 

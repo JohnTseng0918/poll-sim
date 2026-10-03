@@ -61,12 +61,23 @@ struct PopulationParams {
 
     // Distribution of mobile phone count [age][candidate][k], k = 0..kMaxPhones;
     // each row sums to 1. Equal rows within an age group: phone count depends on age only.
+    // Default: within each age group DPP supporters own more phones (multiplicity bias
+    // that age weighting cannot fix), while the share with no phone depends on age only.
     // Values are placeholders.
     using PhoneDist = Arr<double, kMaxPhones + 1>;
     Arr<Arr<PhoneDist, kCandidateCount>, kAgeGroupCount> phone_share{{
-        {{{0.01, 0.80, 0.15, 0.04}, {0.01, 0.80, 0.15, 0.04}, {0.01, 0.80, 0.15, 0.04}}},
-        {{{0.02, 0.83, 0.12, 0.03}, {0.02, 0.83, 0.12, 0.03}, {0.02, 0.83, 0.12, 0.03}}},
-        {{{0.10, 0.80, 0.08, 0.02}, {0.10, 0.80, 0.08, 0.02}, {0.10, 0.80, 0.08, 0.02}}},
+        // DPP                    KMT                       None
+        {{{0.01, 0.70, 0.22, 0.07}, {0.01, 0.85, 0.11, 0.03}, {0.01, 0.86, 0.10, 0.03}}},  // Young
+        {{{0.02, 0.75, 0.18, 0.05}, {0.02, 0.88, 0.08, 0.02}, {0.02, 0.88, 0.08, 0.02}}},  // Middle
+        {{{0.10, 0.73, 0.13, 0.04}, {0.10, 0.84, 0.05, 0.01}, {0.10, 0.85, 0.04, 0.01}}},  // Senior
+    }};
+
+    // Mobile response rate [age][candidate], analogous to response_rate for landlines.
+    // Equal values within a row: response depends on age only (MAR). Values are placeholders.
+    Arr<Arr<double, kCandidateCount>, kAgeGroupCount> mobile_response_rate{{
+        {0.20, 0.20, 0.20},  // Young
+        {0.25, 0.25, 0.25},  // Middle
+        {0.30, 0.30, 0.30},  // Senior
     }};
 
     // Throws std::invalid_argument if any parameter is invalid.
@@ -120,6 +131,7 @@ inline void PopulationParams::validate() const {
         for (std::size_t c = 0; c < kCandidateCount; ++c) {
             const std::string cell = row + "[" + std::to_string(c) + "]";
             detail::check_probability(response_rate[a][c], "response_rate" + cell);
+            detail::check_probability(mobile_response_rate[a][c], "mobile_response_rate" + cell);
             detail::check_probability(landline_share[a][c], "landline_share" + cell);
             detail::check_distribution(phone_share[a][c], "phone_share" + cell);
         }

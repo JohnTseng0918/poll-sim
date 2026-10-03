@@ -6,7 +6,7 @@ Election poll micro-simulator in C++20: generates a synthetic voter population, 
 
 ```bash
 cmake -S . -B build && cmake --build build
-./build/poll_sim          # ~23 s in Release; output is deterministic (fixed seeds)
+./build/poll_sim          # ~55 s in Release; output is deterministic (fixed seeds)
 ```
 
 No test suite yet. Verify changes by building with zero warnings and checking the printed tables.

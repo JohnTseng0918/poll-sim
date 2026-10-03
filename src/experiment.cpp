@@ -18,9 +18,11 @@ std::vector<PollResult> run_experiment(const std::vector<Voter>& population,
     std::mt19937_64 rng(sim.seed);
 
     // Built once per experiment and shared by every replication.
-    std::vector<std::size_t> landline_frame;
+    std::vector<std::size_t> frame;
     if (method == SamplingMethod::Landline) {
-        landline_frame = build_landline_frame(population);
+        frame = build_landline_frame(population);
+    } else if (method == SamplingMethod::Mobile) {
+        frame = build_mobile_frame(population);
     }
 
     std::vector<PollResult> results;
@@ -31,8 +33,11 @@ std::vector<PollResult> run_experiment(const std::vector<Voter>& population,
                 sample = simple_random_sample(population, sample_size, rng);
                 break;
             case SamplingMethod::Landline:
-                sample = landline_sample(population, landline_frame, params.response_rate,
-                                         sample_size, rng);
+                sample = landline_sample(population, frame, params.response_rate, sample_size, rng);
+                break;
+            case SamplingMethod::Mobile:
+                sample = mobile_sample(population, frame, params.mobile_response_rate,
+                                       sample_size, rng);
                 break;
         }
         results.push_back(tally(population, sample));

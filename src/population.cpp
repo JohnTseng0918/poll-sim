@@ -1,5 +1,6 @@
 #include "poll_sim/population.hpp"
 
+#include <cstdint>
 #include <random>
 
 namespace poll_sim {
@@ -46,7 +47,7 @@ std::vector<Voter> generate_population(const PopulationParams& params) {
         const auto a = static_cast<std::size_t>(voter.age);
         const auto c = static_cast<std::size_t>(voter.candidate);
         voter.has_landline = landline_dists[a][c](coverage_rng);
-        voter.phones = phone_dists[a][c](coverage_rng);
+        voter.phones = static_cast<std::uint8_t>(phone_dists[a][c](coverage_rng));
         population.push_back(voter);
     }
     return population;

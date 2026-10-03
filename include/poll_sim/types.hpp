@@ -1,31 +1,33 @@
 #pragma once
 
 #include <cstddef>
+#include <cstdint>
 #include <string_view>
 
 namespace poll_sim {
 
 // Enumerators are numbered contiguously from 0 so they can index parameter tables directly.
+// The underlying type is std::uint8_t to keep Voter small.
 
-enum class AgeGroup {
+enum class AgeGroup : std::uint8_t {
     Young,   // 20-39
     Middle,  // 40-59
     Senior,  // 60+
 };
 
-enum class Region {
+enum class Region : std::uint8_t {
     North,
     Central,
     South,
     East,
 };
 
-enum class Gender {
+enum class Gender : std::uint8_t {
     Male,
     Female,
 };
 
-enum class Candidate {
+enum class Candidate : std::uint8_t {
     DPP,
     KMT,
     None,

@@ -28,9 +28,41 @@ constexpr std::string_view to_string(SamplingMethod v) noexcept {
     return "Unknown";
 }
 
+// A voter's population index packed together with the attributes a poll needs, so neither
+// calling a number nor tallying a respondent reads the population. Used for the numbers in a
+// sampling frame and for the respondents in a Sample.
+// Bits 0-23: voter index, 24-25: age group, 26-27: candidate, 28-29: phone count.
+class FrameEntry {
+public:
+    static constexpr std::size_t kMaxVoters = std::size_t{1} << 24;
+
+    // index must be below kMaxVoters.
+    FrameEntry(std::size_t index, const Voter& voter);
+
+    std::size_t voter_index() const { return bits_ & kIndexMask; }
+    AgeGroup age() const { return static_cast<AgeGroup>((bits_ >> kAgeShift) & kFieldMask); }
+    Candidate candidate() const {
+        return static_cast<Candidate>((bits_ >> kCandidateShift) & kFieldMask);
+    }
+    int phones() const { return static_cast<int>((bits_ >> kPhonesShift) & kFieldMask); }
+
+private:
+    static constexpr std::uint32_t kIndexMask = (std::uint32_t{1} << 24) - 1;
+    static constexpr std::uint32_t kFieldMask = 0x3;
+    static constexpr unsigned kAgeShift = 24;
+    static constexpr unsigned kCandidateShift = 26;
+    static constexpr unsigned kPhonesShift = 28;
+
+    std::uint32_t bits_;
+};
+
+static_assert(sizeof(FrameEntry) == 4);
+static_assert(kAgeGroupCount <= 4 && kCandidateCount <= 4 && kMaxPhones <= 3,
+              "FrameEntry stores age group, candidate and phone count in 2 bits each");
+
 // Voters who completed the poll, plus how many voters were contacted to get them.
 struct Sample {
-    std::vector<std::size_t> respondents;  // indices into the population
+    std::vector<FrameEntry> respondents;  // population index and attributes of each respondent
     // Design weight of each respondent, parallel to respondents:
     // 1 for SimpleRandom and Landline, 1 / phones for Mobile (multiplicity weight).
     std::vector<double> weights;
@@ -68,40 +100,10 @@ private:
 // voter; equivalent to Random only because the population is in random order.
 // used is not touched by Sequential.
 // Everyone drawn responds, so contacts == n. Every weight is 1.
-// Throws std::invalid_argument if n exceeds the population size, or used is too small.
+// Throws std::invalid_argument if n exceeds the population size, used is too small, or the
+// population has more than FrameEntry::kMaxVoters voters.
 Sample simple_random_sample(const std::vector<Voter>& population, std::size_t n,
                             DrawOrder order, UsedPositions& used, std::mt19937_64& rng);
-
-// One phone number in a sampling frame: the owner's population index packed together with the
-// attributes a call needs, so calling a number does not read the population.
-// Bits 0-23: voter index, 24-25: age group, 26-27: candidate, 28-29: phone count.
-class FrameEntry {
-public:
-    static constexpr std::size_t kMaxVoters = std::size_t{1} << 24;
-
-    // index must be below kMaxVoters.
-    FrameEntry(std::size_t index, const Voter& voter);
-
-    std::size_t voter_index() const { return bits_ & kIndexMask; }
-    AgeGroup age() const { return static_cast<AgeGroup>((bits_ >> kAgeShift) & kFieldMask); }
-    Candidate candidate() const {
-        return static_cast<Candidate>((bits_ >> kCandidateShift) & kFieldMask);
-    }
-    int phones() const { return static_cast<int>((bits_ >> kPhonesShift) & kFieldMask); }
-
-private:
-    static constexpr std::uint32_t kIndexMask = (std::uint32_t{1} << 24) - 1;
-    static constexpr std::uint32_t kFieldMask = 0x3;
-    static constexpr unsigned kAgeShift = 24;
-    static constexpr unsigned kCandidateShift = 26;
-    static constexpr unsigned kPhonesShift = 28;
-
-    std::uint32_t bits_;
-};
-
-static_assert(sizeof(FrameEntry) == 4);
-static_assert(kAgeGroupCount <= 4 && kCandidateCount <= 4 && kMaxPhones <= 3,
-              "FrameEntry stores age group, candidate and phone count in 2 bits each");
 
 // A sampling frame lists phone numbers; frame[k] describes the owner of number k.
 using Frame = std::vector<FrameEntry>;
@@ -130,12 +132,12 @@ Sample landline_sample(const Frame& frame,
 
 // Simulates a mobile poll: same as landline_sample but calls numbers from the mobile frame.
 // A voter with k phones is k times as likely to be called and may respond more than once
-// through different numbers; each respondent's weight is 1 / k, read from the population.
+// through different numbers; each respondent's weight is 1 / k.
 // For Sequential, shuffle the frame first: build_mobile_frame puts a voter's numbers next
 // to each other.
 // Throws std::invalid_argument if the frame runs out before n voters respond,
 // or used is too small.
-Sample mobile_sample(const std::vector<Voter>& population, const Frame& frame,
+Sample mobile_sample(const Frame& frame,
                      const Arr<Arr<double, kCandidateCount>, kAgeGroupCount>& response_rate,
                      std::size_t n, DrawOrder order, UsedPositions& used,
                      std::mt19937_64& rng);

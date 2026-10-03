@@ -36,7 +36,7 @@ Sample random_phone_sample(const Frame& frame,
         const double p = response_rate[static_cast<std::size_t>(entry.age())]
                                       [static_cast<std::size_t>(entry.candidate())];
         if (unit(rng) < p) {
-            sample.respondents.push_back(entry.voter_index());
+            sample.respondents.push_back(entry);
         }
     }
     sample.contacts = used.count();
@@ -64,7 +64,7 @@ Sample sequential_phone_sample(
         const double p = response_rate[static_cast<std::size_t>(entry.age())]
                                       [static_cast<std::size_t>(entry.candidate())];
         if (unit(rng) < p) {
-            sample.respondents.push_back(entry.voter_index());
+            sample.respondents.push_back(entry);
         }
         ++sample.contacts;
         number = (number + 1 == frame.size()) ? 0 : number + 1;
@@ -73,11 +73,15 @@ Sample sequential_phone_sample(
 }
 
 // Number of responses from a voter who had already responded: a voter who responded through
-// k numbers adds k - 1. Counted once after the poll by sorting a copy of the respondents.
-std::size_t count_duplicates(std::vector<std::size_t> respondents) {
-    std::sort(respondents.begin(), respondents.end());
-    const auto distinct = std::unique(respondents.begin(), respondents.end());
-    return static_cast<std::size_t>(respondents.end() - distinct);
+// k numbers adds k - 1. Counted once after the poll by sorting the respondents' indices.
+std::size_t count_duplicates(const std::vector<FrameEntry>& respondents) {
+    std::vector<std::size_t> indices;
+    for (const FrameEntry& respondent : respondents) {
+        indices.push_back(respondent.voter_index());
+    }
+    std::sort(indices.begin(), indices.end());
+    const auto distinct = std::unique(indices.begin(), indices.end());
+    return static_cast<std::size_t>(indices.end() - distinct);
 }
 
 // Fills respondents and contacts; the caller sets the weights and duplicates.
@@ -137,6 +141,9 @@ Sample simple_random_sample(const std::vector<Voter>& population, std::size_t n,
     if (n > population.size()) {
         throw std::invalid_argument("sample size exceeds population size");
     }
+    if (population.size() > FrameEntry::kMaxVoters) {
+        throw std::invalid_argument("population too large for 24-bit voter indices");
+    }
 
     std::uniform_int_distribution<std::size_t> index_dist(0, population.size() - 1);
     Sample sample;
@@ -144,7 +151,7 @@ Sample simple_random_sample(const std::vector<Voter>& population, std::size_t n,
     if (order == DrawOrder::Sequential) {
         std::size_t index = index_dist(rng);
         for (std::size_t i = 0; i < n; ++i) {
-            sample.respondents.push_back(index);
+            sample.respondents.push_back(FrameEntry(index, population[index]));
             index = (index + 1 == population.size()) ? 0 : index + 1;
         }
     } else {
@@ -157,7 +164,7 @@ Sample simple_random_sample(const std::vector<Voter>& population, std::size_t n,
         while (sample.respondents.size() < n) {
             const std::size_t index = index_dist(rng);
             if (used.insert(index)) {
-                sample.respondents.push_back(index);
+                sample.respondents.push_back(FrameEntry(index, population[index]));
             }
         }
     }
@@ -216,13 +223,13 @@ Sample landline_sample(const Frame& frame,
     return sample;
 }
 
-Sample mobile_sample(const std::vector<Voter>& population, const Frame& frame,
+Sample mobile_sample(const Frame& frame,
                      const Arr<Arr<double, kCandidateCount>, kAgeGroupCount>& response_rate,
                      std::size_t n, DrawOrder order, UsedPositions& used,
                      std::mt19937_64& rng) {
     Sample sample = phone_sample(frame, response_rate, n, order, used, rng);
-    for (std::size_t index : sample.respondents) {
-        sample.weights.push_back(1.0 / population[index].phones);
+    for (const FrameEntry& respondent : sample.respondents) {
+        sample.weights.push_back(1.0 / respondent.phones());
     }
     sample.duplicates = count_duplicates(sample.respondents);
     return sample;

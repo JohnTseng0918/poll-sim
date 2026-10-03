@@ -14,12 +14,12 @@ double PollResult::response_rate() const {
     return static_cast<double>(sample_size) / contacts;
 }
 
-PollResult tally(const std::vector<Voter>& population, const Sample& sample) {
+PollResult tally(const Sample& sample) {
     PollResult result;
     for (std::size_t i = 0; i < sample.respondents.size(); ++i) {
-        const Voter& voter = population[sample.respondents[i]];
-        const auto a = static_cast<std::size_t>(voter.age);
-        const auto c = static_cast<std::size_t>(voter.candidate);
+        const FrameEntry& respondent = sample.respondents[i];
+        const auto a = static_cast<std::size_t>(respondent.age());
+        const auto c = static_cast<std::size_t>(respondent.candidate());
         const double w = sample.weights[i];
         ++result.counts[c];
         ++result.age_counts[a];

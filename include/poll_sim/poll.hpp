@@ -32,7 +32,8 @@ struct PollResult {
 };
 
 // Counts the votes and age groups of the respondents and sums their design weights.
-PollResult tally(const std::vector<Voter>& population, const Sample& sample);
+// Reads only the sample: each respondent carries its own age group and candidate.
+PollResult tally(const Sample& sample);
 
 // Actual vote share of each candidate across the whole population.
 Arr<double, kCandidateCount> population_vote_share(const std::vector<Voter>& population);

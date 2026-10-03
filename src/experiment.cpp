@@ -55,11 +55,11 @@ std::vector<PollResult> run_experiment(const std::vector<Voter>& population, con
                                          sim.order, used, rng);
                 break;
             case SamplingMethod::Mobile:
-                sample = mobile_sample(population, frame, params.mobile_response_rate,
-                                       sample_size, sim.order, used, rng);
+                sample = mobile_sample(frame, params.mobile_response_rate, sample_size,
+                                       sim.order, used, rng);
                 break;
         }
-        results.push_back(tally(population, sample));
+        results.push_back(tally(sample));
     }
     return results;
 }

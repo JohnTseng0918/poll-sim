@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstddef>
+#include <cstdint>
 #include <random>
 #include <string_view>
 #include <vector>
@@ -46,21 +47,24 @@ Sample simple_random_sample(const std::vector<Voter>& population, std::size_t n,
                             std::mt19937_64& rng);
 
 // A sampling frame lists phone numbers; frame[k] is the index of the voter owning number k.
+// Indices are stored as 32 bits to halve the frame size.
+using Frame = std::vector<std::uint32_t>;
 
 // Landline frame: one number per voter with a landline.
 // Simplification: real landlines are shared by a household; here each owner has their own.
-std::vector<std::size_t> build_landline_frame(const std::vector<Voter>& population);
+// Throws std::invalid_argument if a voter index does not fit in 32 bits.
+Frame build_landline_frame(const std::vector<Voter>& population);
 
 // Mobile frame: one number per mobile phone, so a voter with k phones appears k times.
-std::vector<std::size_t> build_mobile_frame(const std::vector<Voter>& population);
+// Throws std::invalid_argument if a voter index does not fit in 32 bits.
+Frame build_mobile_frame(const std::vector<Voter>& population);
 
 // Simulates a landline poll: keeps calling distinct random numbers from the landline frame
 // until n voters respond. Each voter called responds with probability
 // response_rate[age][candidate]; numbers that do not respond are never called again.
 // Every weight is 1.
 // Throws std::invalid_argument if the frame runs out before n voters respond.
-Sample landline_sample(const std::vector<Voter>& population,
-                       const std::vector<std::size_t>& frame,
+Sample landline_sample(const std::vector<Voter>& population, const Frame& frame,
                        const Arr<Arr<double, kCandidateCount>, kAgeGroupCount>& response_rate,
                        std::size_t n, std::mt19937_64& rng);
 
@@ -68,7 +72,7 @@ Sample landline_sample(const std::vector<Voter>& population,
 // A voter with k phones is k times as likely to be called and may respond more than once
 // through different numbers; each respondent's weight is 1 / k.
 // Throws std::invalid_argument if the frame runs out before n voters respond.
-Sample mobile_sample(const std::vector<Voter>& population, const std::vector<std::size_t>& frame,
+Sample mobile_sample(const std::vector<Voter>& population, const Frame& frame,
                      const Arr<Arr<double, kCandidateCount>, kAgeGroupCount>& response_rate,
                      std::size_t n, std::mt19937_64& rng);
 

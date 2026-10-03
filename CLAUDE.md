@@ -22,7 +22,7 @@ No test suite yet. Verify changes by building with zero warnings and checking th
 
 ## Conventions
 
-- **Naive first, no premature optimization.** The user wants to optimize memory/performance later themselves to feel the difference. Do not add `reserve`, bit-packing, SoA, or threading unless asked. (Enums already use `std::uint8_t`, at the user's request.)
+- **Naive first, no premature optimization.** The user wants to optimize memory/performance later themselves to feel the difference. Do not add `reserve`, bit-packing, SoA, or threading unless asked. (Done at the user's request so far: `std::uint8_t` enums, 32-bit frame indices, `reserve` for the phone frames.)
 - Code comments in English; docs (`README.md`, `docs/`) in Traditional Chinese.
 - Everything lives in `namespace poll_sim`. Enums are contiguous from 0 and are used directly as array indices; each has a `k*Count` constant and `to_string`.
 - All tunable parameters live in `include/poll_sim/params.hpp`. Invalid input throws `std::invalid_argument`.

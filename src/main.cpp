@@ -50,7 +50,8 @@ Arr<double, kCandidateCount> expected_vote_share(const PopulationParams& params)
 }
 
 // Prints landline ownership and the mobile phone count distribution against their
-// theoretical values, followed by the size of each sampling frame.
+// theoretical values, followed by the size of each sampling frame (counted from the population,
+// without building the frames).
 void print_coverage(const std::vector<Voter>& population, const PopulationParams& params) {
     double expected_landline = 0.0;
     Arr<double, kMaxPhones + 1> expected_phones{};
@@ -65,11 +66,13 @@ void print_coverage(const std::vector<Voter>& population, const PopulationParams
     }
 
     std::size_t landline_count = 0;
+    std::size_t mobile_numbers = 0;
     Arr<std::size_t, kMaxPhones + 1> phone_counts{};
     for (const Voter& voter : population) {
         if (voter.has_landline) {
             ++landline_count;
         }
+        mobile_numbers += voter.phones;
         ++phone_counts[static_cast<std::size_t>(voter.phones)];
     }
 
@@ -83,8 +86,8 @@ void print_coverage(const std::vector<Voter>& population, const PopulationParams
                   << (std::to_string(k) + (k == kMaxPhones ? "+" : "") + " phones") << std::right
                   << phone_counts[k] / size << "  (expected " << expected_phones[k] << ")\n";
     }
-    std::cout << "  Frames: landline " << build_landline_frame(population).size()
-              << " numbers, mobile " << build_mobile_frame(population).size() << " numbers\n";
+    std::cout << "  Frames: landline " << landline_count << " numbers, mobile " << mobile_numbers
+              << " numbers\n";
 }
 
 enum class Estimator {

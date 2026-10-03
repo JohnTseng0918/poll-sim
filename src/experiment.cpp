@@ -18,7 +18,7 @@ std::vector<PollResult> run_experiment(const std::vector<Voter>& population,
     std::mt19937_64 rng(sim.seed);
 
     // Built once per experiment and shared by every replication.
-    std::vector<std::size_t> frame;
+    Frame frame;
     if (method == SamplingMethod::Landline || method == SamplingMethod::LandlineMNAR) {
         frame = build_landline_frame(population);
     } else if (method == SamplingMethod::Mobile) {

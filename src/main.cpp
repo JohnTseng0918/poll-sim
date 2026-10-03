@@ -462,10 +462,24 @@ int main(int argc, char* argv[]) {
         for (std::size_t n : sim.sample_sizes) {
             SampleSizeResult row;
             row.sample_size = n;
-            for (SamplingMethod method : kSamplingMethods) {
+            rows.push_back(row);
+        }
+
+        // Methods outermost, so each frame is built (and shuffled) once, shared by every
+        // sample size, and freed before the next method's frame is built.
+        for (SamplingMethod method : kSamplingMethods) {
+            const auto frame_start = std::chrono::steady_clock::now();
+            const Frame frame = build_frame(population, method, sim);
+            const auto frame_elapsed =
+                std::chrono::duration<double>(std::chrono::steady_clock::now() - frame_start);
+            std::cout << "  " << to_string(method) << " frame built in " << std::fixed
+                      << std::setprecision(2) << frame_elapsed.count() << " s\n";
+
+            for (SampleSizeResult& row : rows) {
+                const std::size_t n = row.sample_size;
                 const auto experiment_start = std::chrono::steady_clock::now();
                 const std::vector<PollResult> results =
-                    run_experiment(population, params, method, n, sim);
+                    run_experiment(population, frame, params, method, n, sim);
                 const auto experiment_elapsed = std::chrono::duration<double>(
                     std::chrono::steady_clock::now() - experiment_start);
                 std::cout << "  " << to_string(method) << " n = " << n << " done in "
@@ -496,7 +510,6 @@ int main(int argc, char* argv[]) {
                     row.mobile = diagnose_mobile(results, age_share);
                 }
             }
-            rows.push_back(row);
         }
         std::cout << '\n';
 

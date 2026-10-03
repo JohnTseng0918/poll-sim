@@ -83,7 +83,7 @@
 
 1. 依 `PopulationParams` 生成合成選民母體。
 2. 從母體實際計算各候選人的真實支持率與年齡比例，作為比較基準（不使用參數的理論值）。
-3. 對每個樣本數 n，各抽樣方法重複執行 `replications` 次民調。
+3. 對每個抽樣方法建立一次抽樣底冊（Sequential 時手機名單同時洗牌），各樣本數 n 共用，再對每個 n 重複執行 `replications` 次民調；換下一個方法前釋放名單，因此同時只有一份名單在記憶體中。
 4. 每次民調以不同估計方法算出支持率與標準誤，彙整成統計表。
 
 同一抽樣方法的各種估計方法共用同一批民調樣本，差異只來自估計方法。
@@ -152,7 +152,7 @@
 | `population` | `generate_population`：依參數生成母體 |
 | `sampling` | `SamplingMethod`、市話與手機名單（`build_landline_frame`、`build_mobile_frame`）、`simple_random_sample`、`landline_sample`、`mobile_sample`（皆可指定 `DrawOrder`）、`UsedPositions` |
 | `poll` | `PollResult`（各候選人、年齡層、年齡 × 候選人人數，以及設計權重總和）、`tally`、母體真值計算（含各年齡層內的支持比例） |
-| `experiment` | `run_experiment`：以指定抽樣方法重複執行民調 |
+| `experiment` | `build_frame`：依抽樣方法建立名單（Sequential 時洗牌手機名單）；`run_experiment`：以指定抽樣方法與名單重複執行民調 |
 | `estimate` | `Estimate`、未加權、年齡加權、多重性加權、多重性 + 年齡加權估計，以及 Kish 有效樣本數 |
 | `stats` | `summarize`：彙整多次估計的偏差、誤差範圍、涵蓋率等 |
 | `main.cpp` | 串接上述模組並印出結果 |

@@ -5,9 +5,11 @@ Election poll micro-simulator in C++20: generates a synthetic voter population, 
 ## Build & run
 
 ```bash
-cmake -S . -B build && cmake --build build
+cmake --preset release && cmake --build --preset release
 ./build/poll_sim          # ~75 s in Release; output is deterministic (fixed seeds)
 ```
+
+Presets: `release` → `build/`, `profile` → `build-prof/` (Release flags + `-g -fno-omit-frame-pointer`, for `perf record -g`), `debug` → `build-debug/`. Without presets, pass `-DCMAKE_BUILD_TYPE=Profile` etc.; default is Release.
 
 No test suite yet. Verify changes by building with zero warnings and checking the printed tables.
 

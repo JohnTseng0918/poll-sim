@@ -20,16 +20,31 @@ poll-sim/
 
 需求：CMake ≥ 3.20、支援 C++20 的編譯器（GCC ≥ 11、Clang ≥ 14 或 MSVC 2022）。
 
+`CMakePresets.json` 提供三種建置版本，各自建在不同目錄：
+
+| Preset | Build type | 目錄 | 用途 |
+|---|---|---|---|
+| `release` | Release | `build/` | 一般執行（`-O3`） |
+| `profile` | Profile | `build-prof/` | 效能分析：與 Release 相同的最佳化，加上除錯資訊與 frame pointer（`-g -fno-omit-frame-pointer`），供 `perf record -g` 使用 |
+| `debug` | Debug | `build-debug/` | 除錯（不最佳化） |
+
 ```bash
-cmake -S . -B build
-cmake --build build
+cmake --preset release && cmake --build --preset release
+cmake --preset profile && cmake --build --preset profile
 ```
 
-預設為 Release 建置。除錯版：
+不使用 preset 時，以 `CMAKE_BUILD_TYPE` 指定，未指定則為 Release：
 
 ```bash
-cmake -S . -B build-debug -DCMAKE_BUILD_TYPE=Debug
-cmake --build build-debug
+cmake -S . -B build-prof -DCMAKE_BUILD_TYPE=Profile
+cmake --build build-prof
+```
+
+效能分析範例（Profile build 目前只支援 GCC / Clang）：
+
+```bash
+perf stat -e cycles,instructions,cache-misses,branch-misses ./build-prof/poll_sim
+perf record -g ./build-prof/poll_sim && perf report --stdio
 ```
 
 ## 使用

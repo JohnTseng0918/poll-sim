@@ -9,6 +9,14 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
   set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type" FORCE)
 endif()
+set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS Release Debug RelWithDebInfo Profile)
+
+# Profile: Release optimization plus debug info and frame pointers, so that
+# `perf record -g` can resolve symbols and walk call stacks (GCC / Clang only).
+# A normal variable, because CMake creates an empty cache entry for custom build types.
+if(NOT MSVC)
+  set(CMAKE_CXX_FLAGS_PROFILE "-O3 -DNDEBUG -g -fno-omit-frame-pointer")
+endif()
 
 add_library(poll_sim_core
   src/population.cpp

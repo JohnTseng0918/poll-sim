@@ -1,0 +1,40 @@
+{
+  "version": 2,
+  "configurePresets": [
+    {
+      "name": "release",
+      "displayName": "Release",
+      "description": "Optimized build for normal runs",
+      "generator": "Unix Makefiles",
+      "binaryDir": "${sourceDir}/build",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release"
+      }
+    },
+    {
+      "name": "profile",
+      "displayName": "Profile",
+      "description": "Release optimization with debug info and frame pointers, for perf",
+      "generator": "Unix Makefiles",
+      "binaryDir": "${sourceDir}/build-prof",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Profile"
+      }
+    },
+    {
+      "name": "debug",
+      "displayName": "Debug",
+      "description": "Unoptimized build with debug info",
+      "generator": "Unix Makefiles",
+      "binaryDir": "${sourceDir}/build-debug",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug"
+      }
+    }
+  ],
+  "buildPresets": [
+    { "name": "release", "configurePreset": "release" },
+    { "name": "profile", "configurePreset": "profile" },
+    { "name": "debug", "configurePreset": "debug" }
+  ]
+}

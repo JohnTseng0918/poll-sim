@@ -75,7 +75,7 @@
 所有參數集中在 `include/poll_sim/params.hpp`：
 
 - `PopulationParams`：母體大小、各維度比例、投票傾向、接聽率（MAR 與 MNAR 情境）、市話擁有率、手機數量分布、手機接聽率、母體 seed。
-- `SimParams`：要測試的樣本數清單 `sample_sizes`、重複次數 `replications`、抽樣 seed。
+- `SimParams`：要測試的樣本數清單 `sample_sizes`、重複次數 `replications`、抽樣 seed、抽取順序 `order`（可用命令列 `--order=random|sequential` 覆寫）。
 
 母體與抽樣使用不同的 seed，可以固定母體、只改變抽樣。
 
@@ -106,6 +106,18 @@
 
 - 市話名單：每位有市話的選民一筆。
 - 手機名單：每支手機一筆，有 k 支手機的選民出現 k 次，被抽中的機率也是 k 倍（預設參數下約 1,148 萬筆）。
+
+**抽取順序（`SimParams::order`）**：每種抽樣方法都可以用兩種順序取得樣本，由 `--order` 切換，一次執行只用其中一種。
+
+| 順序 | 做法 |
+|---|---|
+| Random（預設） | 隨機抽位置，抽到已用過的就重抽，以 hash set 記錄抽過的位置 |
+| Sequential | 隨機選一個起點，依序往下取（到尾端繞回開頭），直到湊滿樣本；連續的位置不會重複，不需要記錄 |
+
+- 依序抽取只在母體與名單的順序為隨機時才等同隨機抽樣：`generate_population` 逐一獨立產生選民，市話名單沿用母體順序，因此成立。若母體改為依屬性排序，依序抽取會產生嚴重偏差。
+- 手機名單中同一人的號碼相鄰，Sequential 時會先以另一條由抽樣 seed 衍生的亂數序列洗牌，避免同一人的多支手機被接連撥到。
+- 兩種順序的統計性質相同，差別在記憶體存取模式：Sequential 依序讀取名單或母體、不需要 hash set，用來觀察存取模式對效能的影響。洗牌後的手機名單仍會隨機存取母體。
+- Random 模式的輸出與加入此選項前完全相同。
 
 ## 估計方法
 
@@ -138,7 +150,7 @@
 | `voter` | 選民結構 `Voter`（人口屬性、投票傾向、市話與手機數量） |
 | `params` | `PopulationParams`、`SimParams` 與參數驗證 |
 | `population` | `generate_population`：依參數生成母體 |
-| `sampling` | `SamplingMethod`、市話與手機名單（`build_landline_frame`、`build_mobile_frame`）、`simple_random_sample`、`landline_sample`、`mobile_sample` |
+| `sampling` | `SamplingMethod`、市話與手機名單（`build_landline_frame`、`build_mobile_frame`）、`simple_random_sample`、`landline_sample`、`mobile_sample`（皆可指定 `DrawOrder`） |
 | `poll` | `PollResult`（各候選人、年齡層、年齡 × 候選人人數，以及設計權重總和）、`tally`、母體真值計算（含各年齡層內的支持比例） |
 | `experiment` | `run_experiment`：以指定抽樣方法重複執行民調 |
 | `estimate` | `Estimate`、未加權、年齡加權、多重性加權、多重性 + 年齡加權估計，以及 Kish 有效樣本數 |

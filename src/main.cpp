@@ -382,13 +382,55 @@ void print_sample_size_tables(const std::vector<SampleSizeResult>& rows) {
               << "  Mobile+MultWt+AgeWt = multiplicity weights, then post-stratified by age\n";
 }
 
+void print_usage(std::string_view program) {
+    std::cout << "Usage: " << program << " [--order=random|sequential]\n"
+              << "  --order  how polls draw voters or phone numbers; overrides SimParams::order\n"
+              << "           (default " << to_string(SimParams{}.order) << ")\n";
+}
+
+// Applies command-line overrides to sim. Returns false if help was requested.
+// Throws std::invalid_argument on an unknown argument or value.
+bool parse_args(int argc, char* argv[], SimParams& sim) {
+    constexpr std::string_view kOrder = "--order=";
+    for (int i = 1; i < argc; ++i) {
+        const std::string_view arg = argv[i];
+        if (arg == "--help" || arg == "-h") {
+            return false;
+        }
+        if (arg.starts_with(kOrder)) {
+            const std::string_view value = arg.substr(kOrder.size());
+            if (value == "random") {
+                sim.order = DrawOrder::Random;
+            } else if (value == "sequential") {
+                sim.order = DrawOrder::Sequential;
+            } else {
+                throw std::invalid_argument("unknown --order value: " + std::string(value));
+            }
+            continue;
+        }
+        throw std::invalid_argument("unknown argument: " + std::string(arg));
+    }
+    return true;
+}
+
 }  // namespace
 
-int main() {
+int main(int argc, char* argv[]) {
+    SimParams sim;
+    try {
+        if (!parse_args(argc, argv, sim)) {
+            print_usage(argv[0]);
+            return EXIT_SUCCESS;
+        }
+    } catch (const std::invalid_argument& e) {
+        std::cerr << "Invalid arguments: " << e.what() << '\n';
+        print_usage(argv[0]);
+        return EXIT_FAILURE;
+    }
+
     std::cout << "poll-sim v0.1.0\n\n";
 
     const PopulationParams params;
-    const SimParams sim;
 
     try {
         const auto start = std::chrono::steady_clock::now();
@@ -414,7 +456,7 @@ int main() {
         const Arr<double, kAgeGroupCount> age_share = population_age_share(population);
 
         std::cout << "Experiment by sample size: replications = " << sim.replications
-                  << ", seed = " << sim.seed << '\n';
+                  << ", seed = " << sim.seed << ", order = " << to_string(sim.order) << '\n';
 
         std::vector<SampleSizeResult> rows;
         for (std::size_t n : sim.sample_sizes) {

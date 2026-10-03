@@ -41,10 +41,13 @@ struct Sample {
 };
 
 // Draws a simple random sample of n distinct voters (without replacement).
+// Random: draws random indices, redrawing any already drawn.
+// Sequential: takes n consecutive voters from a random start, wrapping around to the first
+// voter; equivalent to Random only because the population is in random order.
 // Everyone drawn responds, so contacts == n. Every weight is 1.
 // Throws std::invalid_argument if n exceeds the population size.
 Sample simple_random_sample(const std::vector<Voter>& population, std::size_t n,
-                            std::mt19937_64& rng);
+                            DrawOrder order, std::mt19937_64& rng);
 
 // A sampling frame lists phone numbers; frame[k] is the index of the voter owning number k.
 // Indices are stored as 32 bits to halve the frame size.
@@ -59,21 +62,24 @@ Frame build_landline_frame(const std::vector<Voter>& population);
 // Throws std::invalid_argument if a voter index does not fit in 32 bits.
 Frame build_mobile_frame(const std::vector<Voter>& population);
 
-// Simulates a landline poll: keeps calling distinct random numbers from the landline frame
+// Simulates a landline poll: keeps calling distinct numbers from the landline frame
 // until n voters respond. Each voter called responds with probability
 // response_rate[age][candidate]; numbers that do not respond are never called again.
-// Every weight is 1.
+// Random: calls random numbers. Sequential: calls consecutive numbers from a random position,
+// wrapping around; the frame must be in random order. Every weight is 1.
 // Throws std::invalid_argument if the frame runs out before n voters respond.
 Sample landline_sample(const std::vector<Voter>& population, const Frame& frame,
                        const Arr<Arr<double, kCandidateCount>, kAgeGroupCount>& response_rate,
-                       std::size_t n, std::mt19937_64& rng);
+                       std::size_t n, DrawOrder order, std::mt19937_64& rng);
 
 // Simulates a mobile poll: same as landline_sample but calls numbers from the mobile frame.
 // A voter with k phones is k times as likely to be called and may respond more than once
 // through different numbers; each respondent's weight is 1 / k.
+// For Sequential, shuffle the frame first: build_mobile_frame puts a voter's numbers next
+// to each other.
 // Throws std::invalid_argument if the frame runs out before n voters respond.
 Sample mobile_sample(const std::vector<Voter>& population, const Frame& frame,
                      const Arr<Arr<double, kCandidateCount>, kAgeGroupCount>& response_rate,
-                     std::size_t n, std::mt19937_64& rng);
+                     std::size_t n, DrawOrder order, std::mt19937_64& rng);
 
 }  // namespace poll_sim

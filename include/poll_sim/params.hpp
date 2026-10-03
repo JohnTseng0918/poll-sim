@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "poll_sim/types.hpp"
@@ -95,6 +96,22 @@ struct PopulationParams {
     void validate() const;
 };
 
+// Order in which a poll goes through the population or a phone frame.
+enum class DrawOrder : std::uint8_t {
+    Random,      // draw random positions, redrawing any already used
+    Sequential,  // take consecutive positions from a random start, wrapping around
+};
+
+inline constexpr std::size_t kDrawOrderCount = 2;
+
+constexpr std::string_view to_string(DrawOrder v) noexcept {
+    switch (v) {
+        case DrawOrder::Random: return "Random";
+        case DrawOrder::Sequential: return "Sequential";
+    }
+    return "Unknown";
+}
+
 // Simulation parameters: how sampling is run.
 struct SimParams {
     // Each sample size is run as a separate experiment.
@@ -102,6 +119,11 @@ struct SimParams {
     std::vector<std::size_t> sample_sizes{50, 100, 400, 1067, 4000, 10000};
     std::size_t replications = 1000;
     std::uint64_t seed = 42;  // used only for sampling
+    // Sequential is much faster (no random memory access, no record of drawn positions) and
+    // statistically equivalent to Random only because the population is generated in random
+    // order; mobile frames are shuffled first because a voter's numbers are adjacent.
+    // Overridable with --order=random|sequential.
+    DrawOrder order = DrawOrder::Random;
     unsigned threads = 0;  // 0 = auto-detect
 };
 

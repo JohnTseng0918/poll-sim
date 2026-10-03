@@ -39,6 +39,17 @@
 - 同一個人可能在同一次民調中經由不同號碼被問到兩次，稱為**重複受訪**。實務上通常無法辨識，兩次回答都會計入樣本。
 - 沒有手機的人完全不會被抽到，形成涵蓋偏差。
 
+### 系統抽樣與依序抽取
+
+程式中為 `--order=sequential`（`DrawOrder::Sequential`）。
+
+- **系統抽樣（systematic sampling）**：從名單隨機選一個起點，之後每隔固定間隔抽一筆。間隔為 1 時就是從起點連續往下抽，模擬器的依序抽取就是這種情況。
+- 只需要一個亂數決定起點，實務上比完全隨機抽樣容易執行。
+- **前提是名單的順序與調查的主題無關。** 名單若依地區、年齡排序，或有週期性（例如每隔 10 筆就是同一種人），連續抽到的人會集中在同一類，產生嚴重偏差。
+- 模擬器的母體是逐一隨機產生的，順序本身就是隨機的，所以依序抽取在統計上等同簡單隨機抽樣。手機名單裡同一人的號碼相鄰，所以先洗牌再依序撥號。
+- 它的用途是效能對照：連續存取記憶體比隨機存取快得多，而且不需要記錄抽過哪些位置。等於把「隨機」從抽樣階段移到產生母體（與洗牌名單）的階段。
+- 每次重複實驗各自隨機選起點，不同次的民調可能抽到重疊的選民，彼此不完全獨立。
+
 ## 誤差從哪裡來
 
 民調的誤差分成兩類，性質完全不同：
@@ -126,6 +137,7 @@
 |---|---|---|
 | 母體 | population | `generate_population`、`PopulationParams` |
 | 簡單隨機抽樣 | simple random sampling (SRS) | `SamplingMethod::SimpleRandom` |
+| 系統抽樣 | systematic sampling | `DrawOrder::Sequential`（`--order=sequential`） |
 | 抽樣底冊 | sampling frame | `build_landline_frame`、`build_mobile_frame` |
 | 接聽率 | response rate（個人層級） | `response_rate`、`landline_mnar_response_rate`、`mobile_response_rate` |
 | 回應率 | response rate（民調層級） | `PollResult::response_rate()` |

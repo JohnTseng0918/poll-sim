@@ -1,5 +1,6 @@
 #include "poll_sim/experiment.hpp"
 
+#include <algorithm>
 #include <random>
 #include <stdexcept>
 
@@ -23,6 +24,12 @@ std::vector<PollResult> run_experiment(const std::vector<Voter>& population,
         frame = build_landline_frame(population);
     } else if (method == SamplingMethod::Mobile) {
         frame = build_mobile_frame(population);
+        if (sim.order == DrawOrder::Sequential) {
+            // A voter's numbers are adjacent in the frame; shuffle so consecutive calls behave
+            // like random calls. Uses its own stream so the polls' stream is unchanged.
+            std::mt19937_64 shuffle_rng(sim.seed ^ 0xD1B54A32D192ED03ULL);
+            std::shuffle(frame.begin(), frame.end(), shuffle_rng);
+        }
     }
 
     std::vector<PollResult> results;
@@ -30,18 +37,19 @@ std::vector<PollResult> run_experiment(const std::vector<Voter>& population,
         Sample sample;
         switch (method) {
             case SamplingMethod::SimpleRandom:
-                sample = simple_random_sample(population, sample_size, rng);
+                sample = simple_random_sample(population, sample_size, sim.order, rng);
                 break;
             case SamplingMethod::Landline:
-                sample = landline_sample(population, frame, params.response_rate, sample_size, rng);
+                sample = landline_sample(population, frame, params.response_rate, sample_size,
+                                         sim.order, rng);
                 break;
             case SamplingMethod::LandlineMNAR:
                 sample = landline_sample(population, frame, params.landline_mnar_response_rate,
-                                         sample_size, rng);
+                                         sample_size, sim.order, rng);
                 break;
             case SamplingMethod::Mobile:
                 sample = mobile_sample(population, frame, params.mobile_response_rate,
-                                       sample_size, rng);
+                                       sample_size, sim.order, rng);
                 break;
         }
         results.push_back(tally(population, sample));

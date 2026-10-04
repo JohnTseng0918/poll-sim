@@ -46,6 +46,10 @@ Sample random_phone_sample(const Frame& frame,
             continue;
         }
 
+        // Deliberately a branch, unlike sequential_phone_sample: the entry comes from a random,
+        // usually cache-missing load, and predicting the answer lets the CPU run ahead and
+        // overlap the next calls' loads. A branch-free, templated version of this loop made
+        // random polls 10-20% slower.
         const FrameEntry entry = frame[number];
         if (answers_call(entry, response_rate, response, unit, rng)) {
             sample.respondents.push_back(entry);
@@ -55,27 +59,30 @@ Sample random_phone_sample(const Frame& frame,
     return sample;
 }
 
-// Keeps calling consecutive numbers from a random position in the frame, wrapping around,
-// until n voters respond. Consecutive numbers are distinct until the frame wraps back to the
-// start, so no record of called numbers is needed.
+// Keeps calling consecutive numbers from position start in the frame, wrapping around, until
+// n voters respond. Consecutive numbers are distinct until the frame wraps back to the start,
+// so no record of called numbers is needed. answers(entry) decides whether a call is answered.
 // Fills respondents and contacts; the caller sets the rest.
-Sample sequential_phone_sample(
-    const Frame& frame, const Arr<Arr<double, kCandidateCount>, kAgeGroupCount>& response_rate,
-    std::size_t n, ResponseModel response, std::mt19937_64& rng) {
-    std::uniform_int_distribution<std::size_t> start_dist(0, frame.size() - 1);
-    std::uniform_real_distribution<double> unit(0.0, 1.0);
-    std::size_t number = start_dist(rng);
+template <class Answers>
+Sample sequential_phone_sample(const Frame& frame, std::size_t n, std::size_t start,
+                               Answers answers) {
+    std::size_t number = start;
     Sample sample;
+    sample.respondents.resize(n);
+    std::size_t count = 0;  // respondents so far
 
-    while (sample.respondents.size() < n) {
+    while (count < n) {
         if (sample.contacts == frame.size()) {
             throw std::invalid_argument("frame exhausted before reaching the sample size");
         }
 
+        // Branch-free: always store the entry, and keep it only if the call is answered;
+        // an unanswered entry is overwritten by the next call. The answer is unpredictable
+        // but the entry is read sequentially, so it is available at once and a mispredicted
+        // branch would be the main cost.
         const FrameEntry entry = frame[number];
-        if (answers_call(entry, response_rate, response, unit, rng)) {
-            sample.respondents.push_back(entry);
-        }
+        sample.respondents[count] = entry;
+        count += answers(entry) ? 1 : 0;
         ++sample.contacts;
         number = (number + 1 == frame.size()) ? 0 : number + 1;
     }
@@ -110,16 +117,25 @@ Sample phone_sample(const Frame& frame,
         throw std::invalid_argument("sample size exceeds frame size");
     }
 
-    Sample sample;
-    switch (order) {
-        case DrawOrder::Random:
-            sample = random_phone_sample(frame, response_rate, n, response, used, rng);
-            break;
-        case DrawOrder::Sequential:
-            sample = sequential_phone_sample(frame, response_rate, n, response, rng);
-            break;
+    if (order == DrawOrder::Random) {
+        return random_phone_sample(frame, response_rate, n, response, used, rng);
     }
-    return sample;
+    // Sequential: each response model gets its own branch-free loop. The random start is drawn
+    // here, once, rather than in each instantiation: the extra call sites of
+    // uniform_int_distribution stopped GCC from inlining it in random_phone_sample, which made
+    // random polls about 12% slower.
+    std::uniform_int_distribution<std::size_t> start_dist(0, frame.size() - 1);
+    const std::size_t start = start_dist(rng);
+    if (response == ResponseModel::Fixed) {
+        return sequential_phone_sample(frame, n, start,
+                                       [](const FrameEntry& entry) { return entry.answers(); });
+    }
+    std::uniform_real_distribution<double> unit(0.0, 1.0);
+    return sequential_phone_sample(frame, n, start, [&](const FrameEntry& entry) {
+        const double p = response_rate[static_cast<std::size_t>(entry.age())]
+                                      [static_cast<std::size_t>(entry.candidate())];
+        return unit(rng) < p;
+    });
 }
 
 void check_frame_index_range(const std::vector<Voter>& population) {

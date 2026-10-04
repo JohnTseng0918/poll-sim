@@ -37,6 +37,8 @@ class FrameEntry {
 public:
     static constexpr std::size_t kMaxVoters = std::size_t{1} << 24;
 
+    // Placeholder entry (voter 0), so containers can be resized before being filled.
+    FrameEntry() = default;
     // index must be below kMaxVoters.
     FrameEntry(std::size_t index, const Voter& voter);
 
@@ -59,7 +61,7 @@ private:
     static constexpr unsigned kPhonesShift = 28;
     static constexpr std::uint32_t kAnswersBit = std::uint32_t{1} << 30;
 
-    std::uint32_t bits_;
+    std::uint32_t bits_ = 0;
 };
 
 static_assert(sizeof(FrameEntry) == 4);

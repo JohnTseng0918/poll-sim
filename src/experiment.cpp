@@ -70,6 +70,8 @@ std::vector<PollResult> run_experiment(const std::vector<Voter>& population, con
     // Records the positions used by random draws; allocated once and reused by every poll.
     UsedPositions used(method == SamplingMethod::SimpleRandom ? population.size()
                                                               : frame.size());
+    // Records mobile respondents to count repeat responses; also allocated once.
+    UsedPositions responded(method == SamplingMethod::Mobile ? population.size() : 0);
 
     std::vector<PollResult> results;
     for (std::size_t r = 0; r < sim.replications; ++r) {
@@ -85,7 +87,7 @@ std::vector<PollResult> run_experiment(const std::vector<Voter>& population, con
                 break;
             case SamplingMethod::Mobile:
                 sample = mobile_sample(frame, response_rate_for(method, params), sample_size,
-                                       sim.order, sim.response, used, rng);
+                                       sim.order, sim.response, used, responded, rng);
                 break;
         }
         results.push_back(tally(sample));

@@ -1,6 +1,5 @@
 #include "poll_sim/sampling.hpp"
 
-#include <algorithm>
 #include <stdexcept>
 
 namespace poll_sim {
@@ -84,15 +83,22 @@ Sample sequential_phone_sample(
 }
 
 // Number of responses from a voter who had already responded: a voter who responded through
-// k numbers adds k - 1. Counted once after the poll by sorting the respondents' indices.
-std::size_t count_duplicates(const std::vector<FrameEntry>& respondents) {
-    std::vector<std::size_t> indices;
+// k numbers adds k - 1. Counted once after the poll by marking each respondent in responded,
+// which must cover the population.
+std::size_t count_duplicates(const std::vector<FrameEntry>& respondents,
+                             UsedPositions& responded) {
+    responded.clear();
+    std::size_t duplicates = 0;
     for (const FrameEntry& respondent : respondents) {
-        indices.push_back(respondent.voter_index());
+        const std::size_t index = respondent.voter_index();
+        if (index >= responded.size()) {
+            throw std::invalid_argument("UsedPositions is smaller than the population");
+        }
+        if (!responded.insert(index)) {
+            ++duplicates;
+        }
     }
-    std::sort(indices.begin(), indices.end());
-    const auto distinct = std::unique(indices.begin(), indices.end());
-    return static_cast<std::size_t>(indices.end() - distinct);
+    return duplicates;
 }
 
 // Fills respondents and contacts; the caller sets the weights and duplicates.
@@ -238,12 +244,12 @@ Sample landline_sample(const Frame& frame,
 Sample mobile_sample(const Frame& frame,
                      const Arr<Arr<double, kCandidateCount>, kAgeGroupCount>& response_rate,
                      std::size_t n, DrawOrder order, ResponseModel response,
-                     UsedPositions& used, std::mt19937_64& rng) {
+                     UsedPositions& used, UsedPositions& responded, std::mt19937_64& rng) {
     Sample sample = phone_sample(frame, response_rate, n, order, response, used, rng);
     for (const FrameEntry& respondent : sample.respondents) {
         sample.weights.push_back(1.0 / respondent.phones());
     }
-    sample.duplicates = count_duplicates(sample.respondents);
+    sample.duplicates = count_duplicates(sample.respondents, responded);
     return sample;
 }
 

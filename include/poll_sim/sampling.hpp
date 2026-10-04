@@ -143,11 +143,13 @@ Sample landline_sample(const Frame& frame,
 // through different numbers; each respondent's weight is 1 / k.
 // For Sequential, shuffle the frame first: build_mobile_frame puts a voter's numbers next
 // to each other.
+// Repeat responses are counted by marking each respondent in responded, which must cover the
+// population and is cleared first.
 // Throws std::invalid_argument if the frame runs out before n voters respond,
-// or used is too small.
+// or used or responded is too small.
 Sample mobile_sample(const Frame& frame,
                      const Arr<Arr<double, kCandidateCount>, kAgeGroupCount>& response_rate,
                      std::size_t n, DrawOrder order, ResponseModel response,
-                     UsedPositions& used, std::mt19937_64& rng);
+                     UsedPositions& used, UsedPositions& responded, std::mt19937_64& rng);
 
 }  // namespace poll_sim
